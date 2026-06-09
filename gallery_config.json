@@ -1,0 +1,80 @@
+{
+  "app_name": "Galeri Zoom Extreme",
+  "version": "1.0.0",
+  "zoom_config": {
+    "min_scale": 1.0,
+    "max_scale": 100.0,
+    "zoom_sensitivity": 1.5,
+    "pan_speed": 1.0,
+    "lock_behavior": {
+      "auto_center_on_reset": true,
+      "clamp_to_edges": true,
+      "background_color": "#000000"
+    },
+    "double_tap_reset": {
+      "enabled": true,
+      "reset_speed_ms": 100
+    },
+    "long_press_behavior": {
+      "enabled": true,
+      "duration_ms": 600,
+      "marker_color": "#39ff14"
+    },
+    "delete_behavior": {
+      "auto_reopen_gallery": true
+    },
+    "video_support": {
+      "enabled": true,
+      "allowed_formats": ["mp4", "webm"],
+      "auto_play": true,
+      "controls": true
+    },
+    "startup_behavior": {
+      "auto_open_on_load": true
+    },
+    "zoom_indicator": {
+      "enabled": true,
+      "position": "top-left",
+      "font_size": "12px",
+      "font_color": "#00e5ff",
+      "background": "rgba(0, 0, 0, 0.5)"
+    },
+    "media_compatibility": {
+      "video_av1_direct_play": true,
+      "video_heavy_fallback_external": true,
+      "supported_images": ["jpeg", "jpg", "webp", "png", "gif", "heic"]
+    },
+    "ui_navigation_modes": {
+      "default_view": "images_grid",
+      "available_views": ["images_grid", "folders_grid", "file_manager_tree"]
+    }
+  },
+  "image_rendering_modes": [
+    {
+      "id": "render_smooth",
+      "label": "Mode: Halus (Anti-Aliasing)",
+      "css_property": "image-rendering: auto; object-fit: contain;"
+    },
+    {
+      "id": "render_pixel",
+      "label": "Mode: Piksel Jujur (Kain/Mikro)",
+      "css_property": "image-rendering: pixelated; object-fit: contain;"
+    }
+  ],
+  "control_buttons": {
+    "bottom_toolbar": [
+      { "id": "btn_open", "label": "🖼️ Buka Foto", "action": "triggerFile" },
+      { "id": "btn_switch_view", "label": "📱 Ganti Tampilan", "action": "switchUiView" },
+      { "id": "btn_render", "label": "💡 Ganti Mode Piksel", "action": "cycleRendering" },
+      { "id": "btn_reset", "label": "🔁 Reset Posisi", "action": "resetTransform" },
+      { "id": "btn_delete", "label": "🗑️ Hapus", "action": "clearImage" },
+      { "id": "btn_more", "label": "⋮", "action": "toggleMoreMenu" }
+    ],
+    "sub_menu_popup": [
+      { "id": "btn_info", "label": "❗ Info File", "action": "showFileInfo" },
+      { "id": "btn_rename", "label": "✏️ Ubah Nama", "action": "renameFile" },
+      { "id": "btn_share", "label": "🔗 Bagikan", "action": "shareImage" },
+      { "id": "btn_delete", "label": "🗑️ Hapus", "action": "clearImage" }
+    ]
+  }
+}
