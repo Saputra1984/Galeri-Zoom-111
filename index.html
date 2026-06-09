@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Galeri Zoom Extreme</title>
+    <style>
+        /* Gaya Dasar & Pembersihan Screen */
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        body, html { width: 100%; height: 100%; background: #000000; font-family: -apple-system, Sans-Serif; overflow: hidden; color: #ffffff; }
+
+        /* --- 1. GERBANG TAMPILAN DEPAN (THREE-VIEW NAVIGATOR) --- */
+        .navigation-header {
+            position: absolute;
+            top: 0; left: 0; width: 100%;
+            height: 50px; background: rgba(15, 15, 15, 0.9);
+            display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 20; backdrop-filter: blur(10px);
+        }
+        .nav-tab {
+            flex: 1; text-align: center; line-height: 50px;
+            font-size: 13px; font-weight: bold; color: #888;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .nav-tab.active { color: #00e5ff; border-bottom: 2px solid #00e5ff; background: rgba(255, 255, 255, 0.02); }
+
+        /* Kontainer Utama untuk Grid Folder/File */
+        .explorer-view {
+            position: absolute;
+            top: 50px; bottom: 80px; width: 100%;
+            padding: 12px; overflow-y: auto;
+            background: #050505; z-index: 15;
+            display: block; /* Default menyala di awal */
+        }
+
+        /* --- 2. RUANG UTAMA ZOOM EXTREME (VIEWER CORE) --- */
+        .viewer-container { 
+            width: 100%; height: 100%; 
+            position: absolute; top: 0; left: 0;
+            display: flex; justify-content: center; align-items: center; 
+            overflow: hidden; background: #000000; z-index: 5;
+        }
+        /* Media Canvas (Foto / Video bergantian di satu wadah) */
+        #gallery-image, #gallery-video { 
+            max-width: 100%; max-height: 100%; 
+            object-fit: contain; display: none;
+            transform-origin: center center;
+            transition: transform 0.02s ease-out;
+        }
+
+        /* Penanda Visual Jika Gambar Ditekan Lama (Long Press Marker) */
+        .marked-focus { border: 4px dashed #39ff14 !important; box-shadow: 0 0 20px #39ff14; }
+
+        .placeholder-text { color: #555; font-size: 13px; text-align: center; padding: 40px 20px; line-height: 1.8; }
+
+        /* --- 3. DOK CONTROLLER BAWAH (TOOLBAR & POPUP) --- */
+        .bottom-toolbar {
+            position: absolute; bottom: 20px; left: 50%;
+            transform: translateX(-50%); display: flex;
+            gap: 8px; z-index: 25; width: 92%; justify-content: center;
+        }
+        .btn-action {
+            background: rgba(30, 30, 30, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff; padding: 12px 14px; border-radius: 20px;
+            font-size: 11px; font-weight: bold; cursor: pointer;
+            backdrop-filter: blur(8px); flex: 1; text-align: center;
+            white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .btn-action:active { background: #00e5ff; color: #000; border-color: #00e5ff; }
+        .btn-more-trigger { max-width: 45px; font-size: 14px; } /* Tombol titik tiga khusus */
+
+        /* Menu Titik Tiga Menggantung ke Atas (Sub Menu Popup) */
+        .sub-menu-popup {
+            position: absolute; bottom: 70px; right: 4%;
+            width: 160px; background: rgba(20, 20, 20, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px; display: none; flex-direction: column;
+            z-index: 30; backdrop-filter: blur(12px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.8); overflow: hidden;
+        }
+        .sub-menu-item {
+            padding: 14px 16px; font-size: 12px; color: #eee;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            cursor: pointer; text-align: left;
+        }
+        .sub-menu-item:last-child { border-bottom: none; color: #ff3b30; } /* Tombol hapus merah */
+        .sub-menu-item:active { background: rgba(0, 229, 255, 0.15); color: #00e5ff; }
+
+        /* Input File Bawaan Android (Disembunyikan) */
+        #file-input { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="navigation-header" id="nav-header">
+        <div class="nav-tab active" onclick="changeTab('images_grid')">🖼️ Gambar</div>
+        <div class="nav-tab" onclick="changeTab('folders_grid')">📁 Folder</div>
+        <div class="nav-tab" onclick="changeTab('file_manager_tree')">💾 Memori</div>
+    </div>
+
+    <div class="explorer-view" id="explorer-area">
+        <div class="placeholder-text" id="initial-prompt">
+            🗂️ Mengindeks file media terbaru di HP...<br>
+            Ketuk "Buka Foto" di bawah jika ingin mencari file secara manual.
+        </div>
+    </div>
+
+    <div class="viewer-container" id="viewer-core">
+        <img id="gallery-image" src="" alt="Extreme Zoom Core">
+        <video id="gallery-video" playsinline loop></video>
+    </div>
+
+    <div class="sub-menu-popup" id="more-menu-popup">
+        <div class="sub-menu-item" onclick="triggerAction('showFileInfo')">ℹ️ Info File</div>
+        <div class="sub-menu-item" onclick="triggerAction('renameFile')">✏️ Ubah Nama</div>
+        <div class="sub-menu-item" onclick="triggerAction('shareImage')">🔗 Bagikan</div>
+        <div class="sub-menu-item" onclick="triggerAction('clearImage')">🗑️ Hapus Gambar</div>
+    </div>
+
+    <div class="bottom-toolbar">
+        <button class="btn-action" onclick="triggerAction('triggerFile')">📁 Buka File</button>
+        <button class="btn-action" id="btn-view-toggle" onclick="triggerAction('switchUiView')">🗂️ Tampilan</button>
+        <button class="btn-action" id="btn-pixel-toggle" onclick="triggerAction('cycleRendering')">🔮 Piksel: Halus</button>
+        <button class="btn-action" onclick="triggerAction('resetTransform')">🔄 Reset</button>
+        <button class="btn-action btn-more-trigger" onclick="triggerAction('toggleMoreMenu')">⋮</button>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*,video/*">
+
+    <div id="zoom-badge" style="
+        position: absolute; top: 65px; left: 15px; 
+        background: rgba(0, 0, 0, 0.6); color: #00e5ff; 
+        padding: 4px 10px; border-radius: 10px; 
+        font-size: 12px; font-weight: bold; font-family: monospace;
+        z-index: 22; border: 1px solid rgba(0, 229, 255, 0.3);
+        display: none; pointer-events: none;
+    ">Zoom: 1.0x</div>
+
+    <script>
+        // Membaca Konfigurasi Otak JSON Master
+        const galleryConfig = {
+            "zoom_config": {
+                "min_scale": 1.0,
+                "max_scale": 100.0,
+                "zoom_sensitivity": 1.5,
+                "lock_behavior": { "clamp_to_edges": true },
+                "double_tap_reset": { "enabled": true, "reset_speed_ms": 100 }
+            },
+            "image_rendering_modes": [
+                { "id": "render_smooth", "css_property": "auto" },
+                { "id": "render_pixel", "css_property": "pixelated" }
+            ]
+        };
+
+        // State Utama Tracker Gerakan Jari (RAM 2GB Friendly)
+        let zoomScale = 1;
+        let panX = 0, panY = 0;
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initialTouchDist = 0, initialScale = 1;
+        let currentRenderIdx = 0;
+        
+        // Tracker untuk Ketukan Ganda (Double Tap)
+        let lastTapTime = 0;
+
+        window.onload = () => {
+            initTouchSensors();
+        };
+
+        // Membaca File Lokal (Foto/Video) dari HP
+        document.getElementById('file-input').onchange = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = document.getElementById('gallery-image');
+                const video = document.getElementById('gallery-video');
+                document.getElementById('explorer-area').style.display = 'none';
+                
+                // Cek tipe file apakah video atau gambar
+                if (file.type.startsWith('video/')) {
+                    img.style.display = 'none';
+                    video.src = event.target.result;
+                    video.style.display = 'block';
+                    video.play();
+                } else {
+                    video.style.display = 'none';
+                    video.pause();
+                    img.src = event.target.result;
+                    img.style.display = 'block';
+                }
+                
+                // Tampilkan indikator angka zoom
+                document.getElementById('zoom-badge').style.display = 'block';
+                resetTransform();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // Eksekusi Update Matriks Posisi Gambar/Video & Angka Zoom
+        function updateTransform() {
+            const img = document.getElementById('gallery-image');
+            const video = document.getElementById('gallery-video');
+            const targetElement = (img.style.display === 'block') ? img : video;
+            
+            if (!targetElement) return;
+
+            // LOGIKA MAGNETIK: Batasi pergeseran agar tidak lepas dari layar hitam
+            if (galleryConfig.zoom_config.lock_behavior.clamp_to_edges && zoomScale > 1) {
+                const maxPanX = (window.innerWidth * (zoomScale - 1)) / 2;
+                const maxPanY = (window.innerHeight * (zoomScale - 1)) / 2;
+                
+                panX = Math.max(-maxPanX, Math.min(panX, maxPanX));
+                panY = Math.max(-maxPanY, Math.min(panY, maxPanY));
+            }
+
+            // Jalankan transformasi visual secara instan
+            targetElement.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+            
+            // Update Tampilan Angka Zoom Live di Pojok Layar
+            document.getElementById('zoom-badge').innerText = `Zoom: ${zoomScale.toFixed(1)}x`;
+        }
+
+        // Reset Posisi Total (Balik ke Tengah Semula)
+        function resetTransform() {
+            zoomScale = galleryConfig.zoom_config.min_scale;
+            panX = 0; panY = 0;
+            updateTransform();
+        }
+
+        // Mengganti Ketajaman Piksel (Smooth vs Piksel Jujur)
+        function cycleRendering() {
+            currentRenderIdx = (currentRenderIdx + 1) % galleryConfig.image_rendering_modes.length;
+            const mode = galleryConfig.image_rendering_modes[currentRenderIdx];
+            const img = document.getElementById('gallery-image');
+            
+            img.style.imageRendering = mode.css_property;
+            document.getElementById('btn-pixel-toggle').innerText = `🔮 Piksel: ${currentRenderIdx === 0 ? 'Halus' : 'Jujur'}`;
+        }
+
+        // Rumus Hitung Jarak Jari Matematika Pythagoras
+        function getDistance(e) {
+            return Math.sqrt(Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) + Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2));
+        }
+
+        // PENGENDALI GEOMETRI JARI CORE
+        function initTouchSensors() {
+            const coreContainer = document.getElementById('viewer-core');
+
+            coreContainer.addEventListener('touchstart', (e) => {
+                // Logika Double Tap (Ketuk 2 Kali Cepat untuk Reset Instan)
+                if (e.touches.length === 1) {
+                    const currentTime = new Date().getTime();
+                    const tapLength = currentTime - lastTapTime;
+                    if (tapLength < 300 && tapLength > 0) {
+                        resetTransform(); // Jalankan pemicu mental cepat balik ke tengah
+                        e.preventDefault();
+                        return;
+                    }
+                    lastTapTime = currentTime;
+
+                    // Persiapan Drag 1 Jari
+                    isDragging = true;
+                    startX = e.touches[0].clientX - panX;
+                    startY = e.touches[0].clientY - panY;
+                } else if (e.touches.length === 2) {
+                    // Persiapan Zoom 2 Jari
+                    isDragging = false;
+                    initialTouchDist = getDistance(e);
+                    initialScale = zoomScale;
+                }
+            });
+
+            coreContainer.addEventListener('touchmove', (e) => {
+                e.preventDefault(); // Matikan goyangan default browser Chrome
+
+                if (e.touches.length === 1 && isDragging) {
+                    // Eksekusi Drag 1 Jari Bebas Segala Arah
+                    panX = e.touches[0].clientX - startX;
+                    panY = e.touches[0].clientY - startY;
+                    updateTransform();
+                } else if (e.touches.length === 2) {
+                    // Eksekusi Pinch Zoom Sesuai Batas Maksimal JSON (100x)
+                    const currentDist = getDistance(e);
+                    const ratio = currentDist / initialTouchDist;
+                    
+                    zoomScale = Math.max(galleryConfig.zoom_config.min_scale, Math.min(initialScale * ratio, galleryConfig.zoom_config.max_scale));
+                    
+                    // Tarikan Magnet Otomatis saat diperkecil ke arah 1x
+                    if (zoomScale <= 1.05) {
+                        zoomScale = 1; panX = 0; panY = 0;
+                    }
+                    updateTransform();
+                }
+            });
+
+            coreContainer.addEventListener('touchend', (e) => {
+                if (e.touches.length === 0) {
+                    isDragging = false;
+                    // Kunci akhir memastikan posisi aman di tengah
+                    if (zoomScale === 1) { panX = 0; panY = 0; updateTransform(); }
+                }
+            });
+        }
+
+        // Integrasi Tombol Navigasi Bawah
+        let currentFileObject = null;
+        let currentMediaUrl = "";
+
+        // Interseptor input file untuk merekam data biner asli
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            if(e.target.files[0]) {
+                currentFileObject = e.target.files[0];
+                currentMediaUrl = URL.createObjectURL(currentFileObject);
+            }
+        });
+
+        function triggerAction(actionName) {
+            // Tutup menu popup setiap kali ada tombol yang diklik
+            const menu = document.getElementById('more-menu-popup');
+            if (actionName !== 'toggleMoreMenu') menu.style.display = 'none';
+
+            if (actionName === 'toggleMoreMenu') {
+                menu.style.display = (menu.style.display === 'flex') ? 'none' : 'flex';
+            } 
+            else if (actionName === 'triggerFile') {
+                document.getElementById('file-input').click();
+            } 
+            else if (actionName === 'resetTransform') {
+                resetTransform();
+            } 
+            else if (actionName === 'cycleRendering') {
+                cycleRendering();
+            } 
+            else if (actionName === 'showFileInfo') {
+                // --- FITUR 1: INFO FILE MIKRO ---
+                if (!currentFileObject) return alert("Silakan buka file terlebih dahulu!");
+                
+                const formatSize = (currentFileObject.size / (1024 * 1024)).toFixed(2); // Hitung ke MB
+                const img = document.getElementById('gallery-image');
+                const video = document.getElementById('gallery-video');
+                
+                let dimensi = "Membaca...";
+                if (img.style.display === 'block') {
+                    dimensi = `${img.naturalWidth} x ${img.naturalHeight} Piksel`;
+                } else {
+                    dimensi = `${video.videoWidth} x ${video.videoHeight} Piksel`;
+                }
+
+                alert(
+                    `ℹ️ DETAIL BERKAS MIKRO:\n\n` +
+                    `• Nama: ${currentFileObject.name}\n` +
+                    `• Format: ${currentFileObject.type}\n` +
+                    `• Ukuran: ${formatSize} MB\n` +
+                    `• Resolusi asli: ${dimensi}`
+                );
+            } 
+            else if (actionName === 'renameFile') {
+                // --- FITUR 2: UBAH NAMA FILE ---
+                if (!currentFileObject) return alert("Silakan buka file terlebih dahulu!");
+                
+                let newName = prompt("✏️ Masukkan nama baru untuk berkas ini:", currentFileObject.name);
+                if (newName && newName !== currentFileObject.name) {
+                    // Membuat objek file baru dengan nama hasil ubahan pengguna
+                    currentFileObject = new File([currentFileObject], newName, { type: currentFileObject.type });
+                    alert(`Nama berhasil diubah di memori menjadi:\n${newName}`);
+                }
+            } 
+            else if (actionName === 'shareImage') {
+                // --- FITUR 3: BAGIKAN & LEMPAR KE APLIKASI EDIT ---
+                if (!currentFileObject) return alert("Silakan buka file terlebih dahulu!");
+
+                if (navigator.canShare && navigator.canShare({ files: [currentFileObject] })) {
+                    navigator.share({
+                        files: [currentFileObject],
+                        title: 'Kirim dari Galeri Mikro Extreme',
+                        text: 'Hasil analisis detail kain/objek mikro.'
+                    })
+                    .catch((err) => console.log("Batal membagikan berkas."));
+                } else {
+                    alert("Sistem Android browser tidak mengizinkan pengiriman file otomatis.");
+                }
+            } 
+            else if (actionName === 'clearImage') {
+                // --- FITUR 4: HAPUS & AUTO-BALIK KE FOLDER GALERI HP ---
+                const img = document.getElementById('gallery-image');
+                const video = document.getElementById('gallery-video');
+                
+                // Matikan dan bersihkan wadah layar aktif
+                img.style.display = 'none'; img.src = "";
+                video.style.display = 'none'; video.pause(); video.src = "";
+                document.getElementById('zoom-badge').style.display = 'none';
+                
+                // Tampilkan kembali text petunjuk awal
+                document.getElementById('explorer-area').style.display = 'block';
+                currentFileObject = null;
+                currentMediaUrl = "";
+
+                // JALUR KILAT: Langsung pancing jendela galeri internal HP terbuka otomatis kembali
+                setTimeout(() => {
+                    document.getElementById('file-input').click();
+                }, 300);
+            }
+        }
+    </script>
+</body>
+</html>
