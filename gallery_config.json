@@ -64,8 +64,8 @@
   "control_buttons": {
     "bottom_toolbar": [
       { "id": "btn_open", "label": "🖼️ Buka Foto", "action": "triggerFile" },
-      { "id": "btn_switch_view", "label": "📱 Ganti Tampilan", "action": "switchUiView" },
-      { "id": "btn_render", "label": "💡 Ganti Mode Piksel", "action": "cycleRendering" },
+      { "id": "btn_switch_view", "label": "🔲 Ganti Tampilan", "action": "switchUiView" },
+      { "id": "btn_render", "label": "✨ Ganti Mode Piksel", "action": "cycleRendering" },
       { "id": "btn_reset", "label": "🔁 Reset Posisi", "action": "resetTransform" },
       { "id": "btn_delete", "label": "🗑️ Hapus", "action": "clearImage" },
       { "id": "btn_more", "label": "⋮", "action": "toggleMoreMenu" }
@@ -73,7 +73,7 @@
     "sub_menu_popup": [
       { "id": "btn_info", "label": "❗ Info File", "action": "showFileInfo" },
       { "id": "btn_rename", "label": "✏️ Ubah Nama", "action": "renameFile" },
-      { "id": "btn_share", "label": "🔗 Bagikan", "action": "shareImage" },
+      { "id": "btn_share", "label": "⤴️ Bagikan", "action": "shareImage" },
       { "id": "btn_delete", "label": "🗑️ Hapus", "action": "clearImage" }
     ]
   }
