@@ -97,13 +97,13 @@
     <div class="navigation-header" id="nav-header">
         <div class="nav-tab active" onclick="changeTab('images_grid')">🖼️ Gambar</div>
         <div class="nav-tab" onclick="changeTab('folders_grid')">📁 Folder</div>
-        <div class="nav-tab" onclick="changeTab('file_manager_tree')">💾 Memori</div>
+        <div class="nav-tab" onclick="changeTab('file_manager_tree')">🗂️ Memori</div>
     </div>
 
     <div class="explorer-view" id="explorer-area">
         <div class="placeholder-text" id="initial-prompt">
-            🗂️ Mengindeks file media terbaru di HP...<br>
-            Ketuk "Buka Foto" di bawah jika ingin mencari file secara manual.
+            📜 Mengindeks file media terbaru di HP...<br>
+            Ketuk "Buka File" di bawah jika ingin mencari file secara manual.
         </div>
     </div>
 
@@ -115,15 +115,15 @@
     <div class="sub-menu-popup" id="more-menu-popup">
         <div class="sub-menu-item" onclick="triggerAction('showFileInfo')">❗ Info File</div>
         <div class="sub-menu-item" onclick="triggerAction('renameFile')">✏️ Ubah Nama</div>
-        <div class="sub-menu-item" onclick="triggerAction('shareImage')">🔗 Bagikan</div>
+        <div class="sub-menu-item" onclick="triggerAction('shareImage')">⤴️ Bagikan</div>
         <div class="sub-menu-item" onclick="triggerAction('clearImage')">🗑️ Hapus Gambar</div>
     </div>
 
     <div class="bottom-toolbar">
-        <button class="btn-action" onclick="triggerAction('triggerFile')">📁 Buka File</button>
-        <button class="btn-action" id="btn-view-toggle" onclick="triggerAction('switchUiView')">📱 Tampilan</button>
-        <button class="btn-action" id="btn-pixel-toggle" onclick="triggerAction('cycleRendering')">💡 Piksel: Halus</button>
-        <button class="btn-action" onclick="triggerAction('resetTransform')">🔁 Reset</button>
+        <button class="btn-action" onclick="triggerAction('triggerFile')">📂 Buka File</button>
+        <button class="btn-action" id="btn-view-toggle" onclick="triggerAction('switchUiView')">🔲 Tampilan</button>
+        <button class="btn-action" id="btn-pixel-toggle" onclick="triggerAction('cycleRendering')">✨ Piksel: Halus</button>
+        <button class="btn-action" onclick="triggerAction('resetTransform')">🔄 Reset</button>
         <button class="btn-action btn-more-trigger" onclick="triggerAction('toggleMoreMenu')">⋮</button>
     </div>
 
@@ -146,7 +146,8 @@
                 "max_scale": 100.0,
                 "zoom_sensitivity": 1.5,
                 "lock_behavior": { "clamp_to_edges": true },
-                "double_tap_reset": { "enabled": true, "reset_speed_ms": 100 }
+                "double_tap_reset": { "enabled": true, "reset_speed_ms": 100 },
+                "ui_navigation_modes": ["images_grid", "folders_grid", "file_manager_tree"]
             },
             "image_rendering_modes": [
                 { "id": "render_smooth", "css_property": "auto" },
@@ -161,44 +162,63 @@
         let startX = 0, startY = 0;
         let initialTouchDist = 0, initialScale = 1;
         let currentRenderIdx = 0;
+        let currentTabIdx = 0;
         
         // Tracker untuk Ketukan Ganda (Double Tap)
         let lastTapTime = 0;
+
+        // State Global File Aktif untuk Fitur Menu
+        let currentFileObject = null;
+        let currentMediaUrl = "";
 
         window.onload = () => {
             initTouchSensors();
         };
 
-        // Membaca File Lokal (Foto/Video) dari HP
-        document.getElementById('file-input').onchange = function(e) {
+        // SATU WADAH EVENT LISTENER: Membaca File Lokal (Foto/Video) dengan Aman
+        document.getElementById('file-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const img = document.getElementById('gallery-image');
-                const video = document.getElementById('gallery-video');
-                document.getElementById('explorer-area').style.display = 'none';
-                
-                // Cek tipe file apakah video atau gambar
-                if (file.type.startsWith('video/')) {
-                    img.style.display = 'none';
-                    video.src = event.target.result;
-                    video.style.display = 'block';
-                    video.play();
-                } else {
-                    video.style.display = 'none';
-                    video.pause();
-                    img.src = event.target.result;
-                    img.style.display = 'block';
-                }
-                
-                // Tampilkan indikator angka zoom
-                document.getElementById('zoom-badge').style.display = 'block';
-                resetTransform();
-            };
-            reader.readAsDataURL(file);
-        };
+            currentFileObject = file;
+            currentMediaUrl = URL.createObjectURL(currentFileObject);
+
+            const img = document.getElementById('gallery-image');
+            const video = document.getElementById('gallery-video');
+            document.getElementById('explorer-area').style.display = 'none';
+            
+            // Cek tipe file apakah video atau gambar
+            if (file.type.startsWith('video/')) {
+                img.style.display = 'none';
+                img.src = "";
+                video.src = currentMediaUrl;
+                video.style.display = 'block';
+                video.play();
+            } else {
+                video.style.display = 'none';
+                video.pause();
+                video.src = "";
+                img.src = currentMediaUrl;
+                img.style.display = 'block';
+            }
+            
+            // Tampilkan indikator angka zoom
+            document.getElementById('zoom-badge').style.display = 'block';
+            resetTransform();
+        });
+
+        // Pengendali Pergantian Tab Atas Secara Manual
+        function changeTab(viewMode) {
+            const tabs = document.querySelectorAll('.nav-tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            if(viewMode === 'images_grid') { tabs[0].classList.add('active'); currentTabIdx = 0; }
+            if(viewMode === 'folders_grid') { tabs[1].classList.add('active'); currentTabIdx = 1; }
+            if(viewMode === 'file_manager_tree') { tabs[2].classList.add('active'); currentTabIdx = 2; }
+            
+            document.getElementById('initial-prompt').innerHTML = `🗂️ Membuka mode tampilan: <b>${viewMode.replace('_', ' ').toUpperCase()}</b>...`;
+            document.getElementById('explorer-area').style.display = 'block';
+        }
 
         // Eksekusi Update Matriks Posisi Gambar/Video & Angka Zoom
         function updateTransform() {
@@ -206,7 +226,7 @@
             const video = document.getElementById('gallery-video');
             const targetElement = (img.style.display === 'block') ? img : video;
             
-            if (!targetElement) return;
+            if (!targetElement || targetElement.style.display !== 'block') return;
 
             // LOGIKA MAGNETIK: Batasi pergeseran agar tidak lepas dari layar hitam
             if (galleryConfig.zoom_config.lock_behavior.clamp_to_edges && zoomScale > 1) {
@@ -306,20 +326,8 @@
             });
         }
 
-        // Integrasi Tombol Navigasi Bawah
-        let currentFileObject = null;
-        let currentMediaUrl = "";
-
-        // Interseptor input file untuk merekam data biner asli
-        document.getElementById('file-input').addEventListener('change', function(e) {
-            if(e.target.files[0]) {
-                currentFileObject = e.target.files[0];
-                currentMediaUrl = URL.createObjectURL(currentFileObject);
-            }
-        });
-
+        // INTEGRASI INTERAKSI TOMBOL UTAMA & POPUP SUB-MENU
         function triggerAction(actionName) {
-            // Tutup menu popup setiap kali ada tombol yang diklik
             const menu = document.getElementById('more-menu-popup');
             if (actionName !== 'toggleMoreMenu') menu.style.display = 'none';
 
@@ -329,6 +337,12 @@
             else if (actionName === 'triggerFile') {
                 document.getElementById('file-input').click();
             } 
+            else if (actionName === 'switchUiView') {
+                // Perbaikan Siklus Tab Navigasi otomatis lewat tombol bawah
+                currentTabIdx = (currentTabIdx + 1) % galleryConfig.zoom_config.ui_navigation_modes.length;
+                const nextMode = galleryConfig.zoom_config.ui_navigation_modes[currentTabIdx];
+                changeTab(nextMode);
+            }
             else if (actionName === 'resetTransform') {
                 resetTransform();
             } 
@@ -336,17 +350,16 @@
                 cycleRendering();
             } 
             else if (actionName === 'showFileInfo') {
-                // --- FITUR 1: INFO FILE MIKRO ---
                 if (!currentFileObject) return alert("Silakan buka file terlebih dahulu!");
                 
-                const formatSize = (currentFileObject.size / (1024 * 1024)).toFixed(2); // Hitung ke MB
+                const formatSize = (currentFileObject.size / (1024 * 1024)).toFixed(2);
                 const img = document.getElementById('gallery-image');
                 const video = document.getElementById('gallery-video');
                 
                 let dimensi = "Membaca...";
                 if (img.style.display === 'block') {
                     dimensi = `${img.naturalWidth} x ${img.naturalHeight} Piksel`;
-                } else {
+                } else if (video.style.display === 'block') {
                     dimensi = `${video.videoWidth} x ${video.videoHeight} Piksel`;
                 }
 
@@ -359,18 +372,15 @@
                 );
             } 
             else if (actionName === 'renameFile') {
-                // --- FITUR 2: UBAH NAMA FILE ---
                 if (!currentFileObject) return alert("Silakan buka file terlebih dahulu!");
                 
                 let newName = prompt("✏️ Masukkan nama baru untuk berkas ini:", currentFileObject.name);
                 if (newName && newName !== currentFileObject.name) {
-                    // Membuat objek file baru dengan nama hasil ubahan pengguna
                     currentFileObject = new File([currentFileObject], newName, { type: currentFileObject.type });
                     alert(`Nama berhasil diubah di memori menjadi:\n${newName}`);
                 }
             } 
             else if (actionName === 'shareImage') {
-                // --- FITUR 3: BAGIKAN & LEMPAR KE APLIKASI EDIT ---
                 if (!currentFileObject) return alert("Silakan buka file terlebih dahulu!");
 
                 if (navigator.canShare && navigator.canShare({ files: [currentFileObject] })) {
@@ -385,21 +395,18 @@
                 }
             } 
             else if (actionName === 'clearImage') {
-                // --- FITUR 4: HAPUS & AUTO-BALIK KE FOLDER GALERI HP ---
                 const img = document.getElementById('gallery-image');
                 const video = document.getElementById('gallery-video');
                 
-                // Matikan dan bersihkan wadah layar aktif
                 img.style.display = 'none'; img.src = "";
                 video.style.display = 'none'; video.pause(); video.src = "";
                 document.getElementById('zoom-badge').style.display = 'none';
                 
-                // Tampilkan kembali text petunjuk awal
                 document.getElementById('explorer-area').style.display = 'block';
+                if (currentMediaUrl) URL.revokeObjectURL(currentMediaUrl); // Bersihkan memori RAM 2GB
                 currentFileObject = null;
                 currentMediaUrl = "";
 
-                // JALUR KILAT: Langsung pancing jendela galeri internal HP terbuka otomatis kembali
                 setTimeout(() => {
                     document.getElementById('file-input').click();
                 }, 300);
