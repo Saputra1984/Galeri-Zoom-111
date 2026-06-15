@@ -5,7 +5,7 @@
     "device_target": "Xiaomi 2GB RAM",
     "stability_mode": "hardware_assisted"
   },
-  
+
   "zoom_config": {
     "min_scale": 1.0,
     "max_scale": 100.0,
@@ -51,7 +51,11 @@
     },
     "ui_navigation_modes": {
       "default_view": "images_grid",
-      "available_views": ["images_grid", "folders_grid", "file_manager_tree"]
+      "available_views": [
+        { "id": "images_grid", "label": "🖼️ Riwayat", "filter": "all" },
+        { "id": "folders_grid", "label": "📁 Folder (Kain)", "filter": "image" },
+        { "id": "file_manager_tree", "label": "🗂️ Memori (Video)", "filter": "video" }
+      ]
     }
   },
 
