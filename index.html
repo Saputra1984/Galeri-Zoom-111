@@ -171,7 +171,7 @@
         let currentRenderIdx = 0, currentTabIdx = 0;
         let lastTapTime = 0;
 
-        let currentActiveIdx = -1; // Menandai indeks file yang sedang dibuka di layar zoom
+        let currentActiveIdx = -1; 
         let currentFileObject = null;
         let currentMediaUrl = "";
         let savedMediaList = [];
@@ -181,6 +181,7 @@
             loadSavedMedia();
         };
 
+        // AMAN RAM 2GB: Proses input gambar dengan deteksi kapasitas memori
         document.getElementById('file-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -191,28 +192,45 @@
                 const targetName = file.name;
                 const targetType = file.type;
 
+                // Ambil data terbaru dari localStorage untuk memastikan sinkronisasi
+                const localData = localStorage.getItem('galeri_extreme_db');
+                if (localData) {
+                    savedMediaList = JSON.parse(localData);
+                } else {
+                    savedMediaList = [];
+                }
+
+                // Masukkan data baru ke urutan paling atas
                 savedMediaList.unshift({ name: targetName, type: targetType, data: base64Data });
                 
-                // Pembatasan RAM Ekstrem 2GB (Maksimal 15 slot buffer)
-                if(savedMediaList.length > 15) savedMediaList.pop();
+                // Batasi maksimal 8 file saja agar RAM Xiaomi 5A tidak over-capacity
+                if(savedMediaList.length > 8) savedMediaList.pop();
                 
-                localStorage.setItem('galeri_extreme_db', JSON.stringify(savedMediaList));
-                
-                loadSavedMedia();
-                renderActiveMedia(base64Data, targetType, targetName, 0);
+                // PROTEKSI CRASH: Coba simpan, kalau memori HP penuh langsung bersihkan otomatis
+                try {
+                    localStorage.setItem('galeri_extreme_db', JSON.stringify(savedMediaList));
+                    loadSavedMedia();
+                    renderActiveMedia(base64Data, targetType, targetName, 0);
+                } catch (error) {
+                    alert("⚠️ Memori browser penuh! Aplikasi otomatis menghapus foto lama agar bisa mengambil foto baru.");
+                    // Reset paksa: Sisakan hanya 2 foto terbaru agar longgar kembali
+                    savedMediaList = savedMediaList.slice(0, 2);
+                    localStorage.setItem('galeri_extreme_db', JSON.stringify(savedMediaList));
+                    loadSavedMedia();
+                }
             };
             reader.readAsDataURL(file);
         });
 
         function renderActiveMedia(dataUrl, type, name, indexInList) {
-            currentActiveIdx = indexInList; // Kunci indeks posisi item untuk akurasi hapus
+            currentActiveIdx = indexInList; 
             currentFileObject = { name: name, type: type, size: Math.round((dataUrl.length * 3) / 4) }; 
             currentMediaUrl = dataUrl;
 
             const img = document.getElementById('gallery-image');
             const video = document.getElementById('gallery-video');
             document.getElementById('explorer-area').style.display = 'none';
-            document.getElementById('nav-header').style.display = 'none'; // Sembunyikan Nav saat zoom penuh
+            document.getElementById('nav-header').style.display = 'none'; 
             
             if (type.startsWith('video/')) {
                 img.style.display = 'none'; img.src = "";
@@ -231,7 +249,7 @@
             const emptyPrompt = document.getElementById('empty-prompt');
             
             gridContainer.innerHTML = "";
-            gridContainer.style.display = 'grid'; // Pastikan grid menyala
+            gridContainer.style.display = 'grid'; 
 
             if (localData) {
                 savedMediaList = JSON.parse(localData);
@@ -251,12 +269,17 @@
                         gridContainer.appendChild(box);
                     });
                 } else {
-                    emptyPrompt.innerHTML = 'Belum ada riwayat foto. Ketuk <b>"📂 Buka File"</b> di bawah untuk memuat media dari galeri HP asli.';
-                    emptyPrompt.style.display = 'block';
+                    showEmptyState();
                 }
             } else {
-                emptyPrompt.style.display = 'block';
+                showEmptyState();
             }
+        }
+
+        function showEmptyState() {
+            const emptyPrompt = document.getElementById('empty-prompt');
+            emptyPrompt.innerHTML = 'Belum ada riwayat foto. Ketuk <b>"📂 Buka File"</b> di bawah untuk memuat media dari galeri HP asli.';
+            emptyPrompt.style.display = 'block';
         }
 
         function changeTab(viewMode) {
@@ -278,7 +301,7 @@
         }
 
         function showVirtualFolder(namaFolder) {
-            document.getElementById('thumbnail-container').style.display = 'none'; // Sembunyikan sisa grid riwayat
+            document.getElementById('thumbnail-container').style.display = 'none'; 
             const emptyPrompt = document.getElementById('empty-prompt');
             emptyPrompt.innerHTML = `📁 Mode <b>${namaFolder}</b> aktif.<br>Ketuk tombol "Buka File" di bawah untuk memuat gambar baru ke dalam folder ini.`;
             emptyPrompt.style.display = 'block';
@@ -316,6 +339,7 @@
             return Math.sqrt(Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) + Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2));
         }
 
+        // Sensor sentuh presisi
         function initTouchSensors() {
             const coreContainer = document.getElementById('viewer-core');
             coreContainer.addEventListener('touchstart', (e) => {
@@ -340,12 +364,12 @@
             });
             coreContainer.addEventListener('touchend', () => { 
                 isDragging = false; 
-                // Kunci pengaman koordinat pinggiran saat jari dilepas
                 if (zoomScale === 1) { panX = 0; panY = 0; } 
                 updateTransform(); 
             });
         }
 
+        // EKSEKUTOR AKSI UTAMA
         function triggerAction(actionName) {
             const menu = document.getElementById('more-menu-popup');
             if (actionName !== 'toggleMoreMenu') menu.style.display = 'none';
@@ -367,19 +391,31 @@
                 cycleRendering();
             }
             else if (actionName === 'clearImage') {
-                if (currentActiveIdx === -1) return;
-
+                // Sembunyikan elemen view utama
                 document.getElementById('gallery-image').style.display = 'none';
+                document.getElementById('gallery-image').src = "";
                 document.getElementById('gallery-video').style.display = 'none';
+                document.getElementById('gallery-video').src = "";
                 document.getElementById('zoom-badge').style.display = 'none';
                 
-                // FIX AMAN: Potong data di indeks yang benar, bukan pakai .shift() acak
-                savedMediaList.splice(currentActiveIdx, 1);
-                localStorage.setItem('galeri_extreme_db', JSON.stringify(savedMediaList));
+                // Ambil data paling segar dari localstorage
+                const currentLocal = localStorage.getItem('galeri_extreme_db');
+                if (currentLocal) {
+                    let listData = JSON.parse(currentLocal);
+                    
+                    if (currentActiveIdx !== -1 && listData[currentActiveIdx]) {
+                        listData.splice(currentActiveIdx, 1); // Potong index yang aktif
+                        localStorage.setItem('galeri_extreme_db', JSON.stringify(listData));
+                    } else {
+                        // FORCE RESET ACTION: Jika index kacau karena hang, potong antrean paling atas
+                        listData.shift();
+                        localStorage.setItem('galeri_extreme_db', JSON.stringify(listData));
+                    }
+                }
                 
                 currentActiveIdx = -1;
                 document.getElementById('explorer-area').style.display = 'block';
-                document.getElementById('nav-header').style.display = 'flex'; // Munculkan kembali Nav
+                document.getElementById('nav-header').style.display = 'flex'; 
                 loadSavedMedia();
             }
             else if (actionName === 'showFileInfo') {
@@ -390,10 +426,17 @@
                 if (!currentFileObject) return alert("Buka file dulu!");
                 let n = prompt("Nama baru:", currentFileObject.name);
                 if(n && currentActiveIdx !== -1) { 
-                    currentFileObject.name = n; 
-                    savedMediaList[currentActiveIdx].name = n;
-                    localStorage.setItem('galeri_extreme_db', JSON.stringify(savedMediaList));
-                    alert("Nama diubah!"); 
+                    const currentLocal = localStorage.getItem('galeri_extreme_db');
+                    if(currentLocal){
+                        let listData = JSON.parse(currentLocal);
+                        if(listData[currentActiveIdx]){
+                            currentFileObject.name = n; 
+                            listData[currentActiveIdx].name = n;
+                            localStorage.setItem('galeri_extreme_db', JSON.stringify(listData));
+                            loadSavedMedia();
+                            alert("Nama diubah!"); 
+                        }
+                    }
                 }
             }
             else if (actionName === 'shareImage') {
