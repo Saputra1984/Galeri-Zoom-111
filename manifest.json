@@ -1,8 +1,8 @@
 {
-  "name": "Galeri Mikro Extreme",
-  "short_name": "Galeri Mikro",
-  "description": "Pembaca Galeri Foto dan Video Resolusi Mikro Extreme",
-  "start_url": "index.html",
+  "name": "Ai Picture - Galeri Zoom Extreme",
+  "short_name": "Ai Picture",
+  "description": "Pembaca Galeri Foto dan Video Konveksi Resolusi Mikro Extreme",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
