@@ -153,9 +153,9 @@
     <script>
         // Registrasi Service Worker
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('./sw.js')
-            .then(() => console.log('✅ Service Worker terdaftar'))
-            .catch((err) => console.warn('SW gagal:', err));
+          navigator.serviceWorker.register('./sw.js', { scope: './' })
+            .then((reg) => console.log('SW aktif:', reg.scope))
+            .catch((err) => console.error('SW gagal:', err));
         }
 
         // INTEGRASI BLUEPRINT DATA JSON KE MEMORI UTAMA
