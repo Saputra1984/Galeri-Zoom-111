@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aipicture-v1';
+const CACHE_NAME = 'aipicture-v2';
 const CORE = ['./', './index.html', './db.js'];
 
 self.addEventListener('install', (e) => {
