@@ -2,6 +2,7 @@
   "name": "Ai Picture - Galeri Zoom Extreme",
   "short_name": "AiPicture",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#00e5ff",
