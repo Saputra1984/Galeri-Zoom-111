@@ -107,6 +107,7 @@
 
         #file-input { display: none; }
     </style>
+    <script src="./zoom_wasm.js"></script>
 </head>
 <body>
 
@@ -120,6 +121,11 @@
     <div class="viewer-container" id="viewer-core">
         <img id="gallery-image" src="" alt="Extreme Zoom Core">
         <video id="gallery-video" playsinline loop></video>
+        <canvas id="gallery-canvas" style="
+            max-width: 100%; max-height: 100%;
+            display: none;
+            transform-origin: center center;
+        "></canvas>
     </div>
 
     <div class="sub-menu-popup" id="more-menu-popup">
@@ -147,6 +153,24 @@
         z-index: 22; border: 1px solid rgba(0, 229, 255, 0.3);
         display: none; pointer-events: none;
     ">Zoom: 1.0x</div>
+
+    <div id="coord-badge" style="
+        position: fixed;
+        background: rgba(0, 0, 0, 0.85);
+        color: #00e5ff;
+        padding: 5px 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: bold;
+        font-family: monospace;
+        z-index: 26;
+        border: 1px solid rgba(0, 229, 255, 0.4);
+        display: none;
+        pointer-events: none;
+        white-space: nowrap;
+        transform: translate(-50%, -140%);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    "></div>
 
     <script src="db.js"></script>
 
@@ -194,7 +218,11 @@
         };
 
         let zoomScale = 1;
+        let initialPanX = 0, initialPanY = 0;
         let panX = 0, panY = 0;
+        let wasmReady = false;
+        let srcPtr = 0, srcW = 0, srcH = 0;
+        let canvasCtx = null;
         let isDragging = false, startX = 0, startY = 0;
         let initialTouchDist = 0, initialScale = 1;
         let currentRenderIdx = 0, currentTabIdx = 0;
@@ -255,6 +283,26 @@
           } else {
             video.style.display = 'none'; video.pause(); video.src = '';
             img.src = url; img.style.display = 'block';
+            
+            // Kirim pixel ke WASM
+            img.onload = () => {
+                if (!wasmReady) return;
+                if (srcPtr) { Module._free(srcPtr); srcPtr = 0; }
+            
+                srcW = img.naturalWidth;
+                srcH = img.naturalHeight;
+            
+                const off = document.createElement('canvas');
+                off.width = srcW; off.height = srcH;
+                const octx = off.getContext('2d');
+                octx.drawImage(img, 0, 0);
+                const imgData = octx.getImageData(0, 0, srcW, srcH);
+            
+                srcPtr = Module._malloc(imgData.data.length);
+                Module.HEAPU8.set(imgData.data, srcPtr);
+            
+                console.log('📸 Gambar dikirim ke WASM:', srcW + '×' + srcH);
+            };
           }
           document.getElementById('zoom-badge').style.display = 'block';
           resetTransform();
@@ -413,10 +461,124 @@
             }
             targetElement.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
             document.getElementById('zoom-badge').innerText = `Zoom: ${zoomScale.toFixed(1)}x`;
+            requestAnimationFrame(renderCanvasViewport);
+        }
+
+        function renderCanvasViewport() {
+            if (!wasmReady || !srcPtr) return;
+        
+            const img = document.getElementById('gallery-image');
+            const canvas = document.getElementById('gallery-canvas');
+        
+            // Zoom < 1.5 → pakai <img> (native, cepat)
+            if (zoomScale < 1.5) {
+                img.style.display = 'block';
+                canvas.style.display = 'none';
+                img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+                return;
+            }
+        
+            // Zoom >= 1.5 → pakai canvas + WASM bicubic
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+        
+            const cw = window.innerWidth;
+            const ch = window.innerHeight;
+            canvas.width = cw;
+            canvas.height = ch;
+        
+            // Hitung viewport
+            const displayScale = Math.min(cw / srcW, ch / srcH);
+            const totalZoom = displayScale * zoomScale;
+        
+            const centerSrcX = srcW / 2 - (panX / totalZoom);
+            const centerSrcY = srcH / 2 - (panY / totalZoom);
+        
+            const offsetX = centerSrcX - (cw / 2) / totalZoom;
+            const offsetY = centerSrcY - (ch / 2) / totalZoom;
+        
+            // Buffer output
+            const dstSize = cw * ch * 4;
+            const dstPtr = Module._malloc(dstSize);
+        
+            const t0 = performance.now();
+            Module._render_bicubic(
+                srcPtr, srcW, srcH,
+                dstPtr, cw, ch,
+                offsetX, offsetY, totalZoom
+            );
+            const t1 = performance.now();
+        
+            // Copy ke canvas
+            const out = new Uint8ClampedArray(Module.HEAPU8.buffer, dstPtr, dstSize);
+            canvasCtx.putImageData(new ImageData(out, cw, ch), 0, 0);
+        
+            Module._free(dstPtr);
+        
+            // Update badge
+            document.getElementById('zoom-badge').innerText =
+                `Zoom: ${zoomScale.toFixed(1)}x | ${(t1 - t0).toFixed(0)}ms`;
         }
 
         function resetTransform() {
             zoomScale = galleryConfig.zoom_config.min_scale; panX = 0; panY = 0;
+            updateTransform();
+        }
+
+        // Konversi koordinat layar → koordinat piksel gambar asli
+        function screenToImage(sx, sy) {
+            const img = document.getElementById('gallery-image');
+            const video = document.getElementById('gallery-video');
+            const el = (img.style.display === 'block') ? img : video;
+            if (!el || el.style.display !== 'block') return null;
+        
+            const nw = el.naturalWidth || el.videoWidth;
+            const nh = el.naturalHeight || el.videoHeight;
+            if (!nw || !nh) return null;
+        
+            const cw = window.innerWidth, ch = window.innerHeight;
+            const displayScale = Math.min(cw / nw, ch / nh);
+        
+            const lx = (sx - cw / 2 - panX) / zoomScale;
+            const ly = (sy - ch / 2 - panY) / zoomScale;
+            const px = Math.round(lx / displayScale + nw / 2);
+            const py = Math.round(ly / displayScale + nh / 2);
+        
+            return { px, py, nw, nh };
+        }
+        
+        function showCoordBadge(sx, sy) {
+            const info = screenToImage(sx, sy);
+            const badge = document.getElementById('coord-badge');
+            if (!info) { badge.style.display = 'none'; return; }
+            badge.style.display = 'block';
+            badge.style.left = sx + 'px';
+            badge.style.top = sy + 'px';
+            badge.textContent = `X:${info.px} Y:${info.py}`;
+        }
+        
+        function hideCoordBadge() {
+            document.getElementById('coord-badge').style.display = 'none';
+        }
+        
+        // Double tap: zoom ke titik yang ditap, atau reset kalau sudah zoom
+        function handleDoubleTap(tx, ty) {
+            const cfg = galleryConfig.zoom_config;
+            const cw = window.innerWidth, ch = window.innerHeight;
+        
+            if (zoomScale > 1.5) {
+                // Sudah zoom → reset
+                zoomScale = cfg.min_scale;
+                panX = 0; panY = 0;
+            } else {
+                // Zoom ke titik yang ditap
+                const newZoom = 5.0;
+                const lx = tx - cw / 2 - panX;
+                const ly = ty - ch / 2 - panY;
+                panX = -lx * (newZoom / zoomScale);
+                panY = -ly * (newZoom / zoomScale);
+                zoomScale = newZoom;
+            }
             updateTransform();
         }
 
@@ -434,29 +596,95 @@
 
         function initTouchSensors() {
             const coreContainer = document.getElementById('viewer-core');
+        
             coreContainer.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 1) {
-                    const currentTime = new Date().getTime();
-                    if (currentTime - lastTapTime < 300 && currentTime - lastTapTime > 0) { resetTransform(); e.preventDefault(); return; }
-                    lastTapTime = currentTime;
-                    isDragging = true; startX = e.touches[0].clientX - panX; startY = e.touches[0].clientY - panY;
+                    const tx = e.touches[0].clientX;
+                    const ty = e.touches[0].clientY;
+                    const now = Date.now();
+        
+                    // Tampilkan coord badge
+                    showCoordBadge(tx, ty);
+        
+                    // Deteksi double tap
+                    if (now - lastTapTime < 300 && now - lastTapTime > 0) {
+                        handleDoubleTap(tx, ty);
+                        e.preventDefault();
+                        lastTapTime = 0;
+                        return;
+                    }
+                    lastTapTime = now;
+        
+                    isDragging = true;
+                    startX = tx - panX;
+                    startY = ty - panY;
+        
                 } else if (e.touches.length === 2) {
-                    isDragging = false; initialTouchDist = getDistance(e); initialScale = zoomScale;
+                    isDragging = false;
+                    hideCoordBadge();
+                    initialTouchDist = getDistance(e);
+                    initialScale = zoomScale;
+                    initialPanX = panX;
+                    initialPanY = panY;
                 }
             });
+        
             coreContainer.addEventListener('touchmove', (e) => {
                 e.preventDefault();
-                if (e.touches.length === 1 && isDragging) {
-                    panX = e.touches[0].clientX - startX; panY = e.touches[0].clientY - startY; updateTransform();
+                const cfg = galleryConfig.zoom_config;
+        
+                if (e.touches.length === 1) {
+                    const tx = e.touches[0].clientX;
+                    const ty = e.touches[0].clientY;
+        
+                    showCoordBadge(tx, ty);
+        
+                    if (isDragging) {
+                        panX = tx - startX;
+                        panY = ty - startY;
+                        updateTransform();
+                    }
+        
                 } else if (e.touches.length === 2) {
-                    const cfg = galleryConfig.zoom_config;
-                    let sens = (getDistance(e) / initialTouchDist) * initialScale * cfg.zoom_sensitivity;
-                    zoomScale = Math.max(cfg.min_scale, Math.min(sens, cfg.max_scale));
+                    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    const dist = getDistance(e);
+                    const ratio = dist / initialTouchDist;
+        
+                    // Sensitivitas non-linear: makin zoom, makin halus
+                    const dampening = 1 / (1 + Math.log10(Math.max(1, initialScale)) * 0.6);
+                    const newZoom = Math.max(
+                        cfg.min_scale,
+                        Math.min(initialScale * Math.pow(ratio, dampening), cfg.max_scale)
+                    );
+        
+                    const cw = window.innerWidth, ch = window.innerHeight;
+                    const lx = (mx - cw / 2 - initialPanX) / initialScale;
+                    const ly = (my - ch / 2 - initialPanY) / initialScale;
+        
+                    panX = mx - cw / 2 - lx * newZoom;
+                    panY = my - ch / 2 - ly * newZoom;
+                    zoomScale = newZoom;
+        
                     if (zoomScale <= 1.05) { zoomScale = 1; panX = 0; panY = 0; }
                     updateTransform();
                 }
             });
-            coreContainer.addEventListener('touchend', () => { isDragging = false; if (zoomScale === 1) { panX = 0; panY = 0; } updateTransform(); });
+        
+            coreContainer.addEventListener('touchend', (e) => {
+                isDragging = false;
+                if (zoomScale === 1) { panX = 0; panY = 0; }
+        
+                // Sembunyikan coord badge jika tidak ada jari tersisa
+                if (e.touches.length === 0) hideCoordBadge();
+        
+                updateTransform();
+            });
+        
+            coreContainer.addEventListener('touchcancel', () => {
+                isDragging = false;
+                hideCoordBadge();
+            });
         }
 
         // PENGENDALI AKSI MODUL UTAMA & POPUP
@@ -505,6 +733,22 @@
                 alert("Memicu Android Share Sheet...");
             }
         }
+
+        window.addEventListener('load', () => {
+            canvasCtx = document.getElementById('gallery-canvas').getContext('2d');
+        
+            // Tunggu WASM siap (Module di-define oleh zoom_wasm.js)
+            const waitWasm = setInterval(() => {
+                if (typeof Module !== 'undefined' && Module.calledRun) {
+                    wasmReady = true;
+                    clearInterval(waitWasm);
+                    console.log('✅ WASM bicubic siap');
+                }
+            }, 100);
+        
+            // Timeout 10 detik
+            setTimeout(() => clearInterval(waitWasm), 10000);
+        });
     </script>
   <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
   <script>eruda.init();</script>
