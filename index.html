@@ -258,7 +258,9 @@
           }
           document.getElementById('zoom-badge').style.display = 'block';
           resetTransform();
-          window.history.pushState({ view: 'viewer' }, 'Viewer');
+          if (!history.state || !history.state.viewer) {
+              history.pushState({viewer: true}, '');
+          }
         }
 
         // Cek parameter URL saat halaman dibuka
@@ -272,18 +274,41 @@
           }
         });
 
+        // Handler tombol back HP
+        window.addEventListener('popstate', function(event) {
+            // Kalau viewer sedang terbuka → tutup viewer
+            if (document.getElementById('zoom-badge').style.display === 'block') {
+                document.getElementById('gallery-image').style.display = 'none';
+                document.getElementById('gallery-image').src = '';
+                document.getElementById('gallery-video').style.display = 'none';
+                document.getElementById('gallery-video').src = '';
+                document.getElementById('zoom-badge').style.display = 'none';
+                currentActiveMedia = null;
+                document.getElementById('explorer-area').style.display = 'block';
+                document.getElementById('nav-header').style.display = 'flex';
+                const activeView = galleryConfig.zoom_config.ui_navigation_modes.available_views[currentTabIdx];
+                changeTab(activeView.id, activeView.filter, currentTabIdx);
+            }
+            // Kalau viewer TIDAK terbuka → biarkan Android keluar app
+        });
+
         function tutupLayarZoom() {
+            if (history.state && history.state.viewer) {
+                history.back();
+            } else {
+                _tutupLayarZoomInternal();
+            }
+        }
+        
+        function _tutupLayarZoomInternal() {
             document.getElementById('gallery-image').style.display = 'none';
-            document.getElementById('gallery-image').src = "";
+            document.getElementById('gallery-image').src = '';
             document.getElementById('gallery-video').style.display = 'none';
-            document.getElementById('gallery-video').src = "";
+            document.getElementById('gallery-video').src = '';
             document.getElementById('zoom-badge').style.display = 'none';
-            
-            currentActiveIdx = -1;
+            currentActiveMedia = null;
             document.getElementById('explorer-area').style.display = 'block';
-            document.getElementById('nav-header').style.display = 'flex'; 
-            
-            // Kembalikan tampilan sesuai tab filter yang sedang aktif
+            document.getElementById('nav-header').style.display = 'flex';
             const activeView = galleryConfig.zoom_config.ui_navigation_modes.available_views[currentTabIdx];
             changeTab(activeView.id, activeView.filter, currentTabIdx);
         }
