@@ -148,7 +148,16 @@
         display: none; pointer-events: none;
     ">Zoom: 1.0x</div>
 
+    <script src="db.js"></script>
+
     <script>
+        // Registrasi Service Worker
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('./sw.js')
+            .then(() => console.log('✅ Service Worker terdaftar'))
+            .catch((err) => console.warn('SW gagal:', err));
+        }
+
         // INTEGRASI BLUEPRINT DATA JSON KE MEMORI UTAMA
         const galleryConfig = {
             "app_metadata": {
@@ -159,7 +168,7 @@
             },
             "zoom_config": {
                 "min_scale": 1.0,
-                "max_scale": 1000.0,
+                "max_scale": 100.0,
                 "zoom_sensitivity": 1.5,
                 "pan_speed": 1.0,
                 "lock_behavior": {
@@ -219,68 +228,48 @@
         }
 
         // AMAN RAM 2GB: Proses input gambar dengan proteksi penyimpanan penuh
-        document.getElementById('file-input').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const base64Data = event.target.result;
-                const localData = localStorage.getItem('galeri_extreme_db');
-                savedMediaList = localData ? JSON.parse(localData) : [];
-
-                savedMediaList.unshift({ name: file.name, type: file.type, data: base64Data });
-                
-                // Kunci maksimal 8 file agar Chrome HP 2GB RAM tidak forced-close
-                if(savedMediaList.length > 8) savedMediaList.pop();
-                
-                try {
-                    localStorage.setItem('galeri_extreme_db', JSON.stringify(savedMediaList));
-                    // Langsung beralih ke tab riwayat utama agar sinkron
-                    const views = galleryConfig.zoom_config.ui_navigation_modes.available_views;
-                    changeTab(views[0].id, views[0].filter, 0);
-                    renderActiveMedia(base64Data, file.type, file.name, 0);
-                } catch (error) {
-                    alert("⚠️ Memori browser penuh! Sistem otomatis membersihkan berkas lama.");
-                    savedMediaList = savedMediaList.slice(0, 2);
-                    localStorage.setItem('galeri_extreme_db', JSON.stringify(savedMediaList));
-                    loadSavedMedia();
-                }
-            };
-            reader.readAsDataURL(file);
+        document.getElementById('file-input').addEventListener('change', async function(e) {
+          const files = e.target.files;
+          if (!files.length) return;
+        
+          for (const file of files) {
+            await simpanMedia(file);
+          }
+          await loadSavedMedia();
         });
 
         // BUKA GAMBAR & AKTIFKAN PEMBATAS INTERCEPT TOMBOL BACK HP
-        function renderActiveMedia(dataUrl, type, name, indexInList) {
-            currentActiveIdx = indexInList; 
-            currentFileObject = { name: name, type: type, size: Math.round((dataUrl.length * 3) / 4) }; 
-            currentMediaUrl = dataUrl;
-
-            const img = document.getElementById('gallery-image');
-            const video = document.getElementById('gallery-video');
-            document.getElementById('explorer-area').style.display = 'none';
-            document.getElementById('nav-header').style.display = 'none'; 
-            
-            if (type.startsWith('video/') && galleryConfig.zoom_config.video_support.enabled) {
-                img.style.display = 'none'; img.src = "";
-                video.src = dataUrl; video.style.display = 'block'; 
-                if(galleryConfig.zoom_config.video_support.auto_play) video.play();
-            } else {
-                video.style.display = 'none'; video.pause(); video.src = "";
-                img.src = dataUrl; img.style.display = 'block';
-            }
-            document.getElementById('zoom-badge').style.display = 'block';
-            resetTransform();
-
-            // Kunci navigasi: Menambahkan riwayat semu agar saat tombol back HP ditekan, halaman tidak keluar
-            window.history.pushState({view: "viewer"}, "Viewer");
+        function renderActiveMedia(media) {
+          currentActiveMedia = media; // simpan object utuh
+          const img = document.getElementById('gallery-image');
+          const video = document.getElementById('gallery-video');
+        
+          document.getElementById('explorer-area').style.display = 'none';
+          document.getElementById('nav-header').style.display = 'none';
+        
+          const url = blobUrl(media.blob);
+        
+          if (media.type.startsWith('video/')) {
+            img.style.display = 'none'; img.src = '';
+            video.src = url; video.style.display = 'block'; video.play();
+          } else {
+            video.style.display = 'none'; video.pause(); video.src = '';
+            img.src = url; img.style.display = 'block';
+          }
+          document.getElementById('zoom-badge').style.display = 'block';
+          resetTransform();
+          window.history.pushState({ view: 'viewer' }, 'Viewer');
         }
 
-        // DETEKSI TOMBOL KEMBALI FISIK ANDROID
-        window.addEventListener('popstate', function(event) {
-            if (document.getElementById('zoom-badge').style.display === 'block') {
-                tutupLayarZoom();
-            }
+        // Cek parameter URL saat halaman dibuka
+        window.addEventListener('load', async () => {
+          const params = new URLSearchParams(location.search);
+          if (params.get('shared') === 'ok') {
+            // Bersihkan URL
+            history.replaceState({}, '', location.pathname);
+            await loadSavedMedia();
+            alert('✅ Gambar berhasil ditambahkan dari share!');
+          }
         });
 
         function tutupLayarZoom() {
@@ -300,29 +289,32 @@
         }
 
         // MENAMPILKAN MEDIA BERDASARKAN FILTER SELEKTIF JSON
-        function loadSavedMedia() {
-            const localData = localStorage.getItem('galeri_extreme_db');
-            const gridContainer = document.getElementById('thumbnail-container');
-            const emptyPrompt = document.getElementById('empty-prompt');
-            
-            gridContainer.innerHTML = "";
-            gridContainer.style.display = 'grid'; 
-
-            if (localData) {
-                savedMediaList = JSON.parse(localData);
-                if(savedMediaList.length > 0) {
-                    emptyPrompt.style.display = 'none';
-                    savedMediaList.forEach((media, idx) => {
-                        const box = document.createElement('div');
-                        box.className = "grid-item";
-                        box.onclick = () => renderActiveMedia(media.data, media.type, media.name, idx);
-                        box.innerHTML = media.type.startsWith('video/') ? 
-                            `<video src="${media.data}#t=0.5"></video><div class="video-badge">VIDEO</div>` : 
-                            `<img src="${media.data}">`;
-                        gridContainer.appendChild(box);
-                    });
-                } else { showEmptyState(); }
-            } else { showEmptyState(); }
+        async function loadSavedMedia() {
+          const gridContainer = document.getElementById('thumbnail-container');
+          const emptyPrompt = document.getElementById('empty-prompt');
+          gridContainer.innerHTML = '';
+          gridContainer.style.display = 'grid';
+        
+          const list = await ambilSemuaMedia();
+          savedMediaList = list; // array global (object, bukan string)
+        
+          if (list.length === 0) {
+            showEmptyState();
+            return;
+          }
+          emptyPrompt.style.display = 'none';
+        
+          list.forEach((media) => {
+            const box = document.createElement('div');
+            box.className = 'grid-item';
+            // Pakai thumbBlob kalau ada, fallback ke blob asli
+            const url = blobUrl(media.thumbBlob || media.blob);
+            box.innerHTML = media.type.startsWith('video/')
+              ? `<video src="${url}#t=0.5" muted></video><div class="video-badge">VIDEO</div>`
+              : `<img src="${url}" loading="lazy">`;
+            box.onclick = () => renderActiveMedia(media);
+            gridContainer.appendChild(box);
+          });
         }
 
         function showEmptyState() {
@@ -443,7 +435,7 @@
         }
 
         // PENGENDALI AKSI MODUL UTAMA & POPUP
-        function triggerAction(actionName) {
+        async function triggerAction(actionName) {
             const menu = document.getElementById('more-menu-popup');
             if (actionName !== 'toggleMoreMenu') menu.style.display = 'none';
 
@@ -465,42 +457,31 @@
                 cycleRendering();
             }
             else if (actionName === 'clearImage') {
-                const currentLocal = localStorage.getItem('galeri_extreme_db');
-                if (currentLocal) {
-                    let listData = JSON.parse(currentLocal);
-                    if (currentActiveIdx !== -1 && listData[currentActiveIdx]) {
-                        listData.splice(currentActiveIdx, 1);
-                        localStorage.setItem('galeri_extreme_db', JSON.stringify(listData));
-                    }
-                }
-                tutupLayarZoom();
+              if (currentActiveMedia) {
+                await hapusMedia(currentActiveMedia.id);
+                currentActiveMedia = null;
+              }
+              tutupLayarZoom();
             }
             else if (actionName === 'showFileInfo') {
                 if (!currentFileObject) return alert("Buka file dulu!");
                 alert(`ℹ️ DETAIL BERKAS:\n• Nama: ${currentFileObject.name}\n• Tipe: ${currentFileObject.type}\n• Ukuran: ${(currentFileObject.size / (1024*1024)).toFixed(2)} MB`);
             }
             else if (actionName === 'renameFile') {
-                if (!currentFileObject) return alert("Buka file dulu!");
-                let n = prompt("Nama baru:", currentFileObject.name);
-                if(n && currentActiveIdx !== -1) { 
-                    const currentLocal = localStorage.getItem('galeri_extreme_db');
-                    if(currentLocal){
-                        let listData = JSON.parse(currentLocal);
-                        if(listData[currentActiveIdx]){
-                            currentFileObject.name = n; 
-                            listData[currentActiveIdx].name = n;
-                            localStorage.setItem('galeri_extreme_db', JSON.stringify(listData));
-                            const activeView = galleryConfig.zoom_config.ui_navigation_modes.available_views[currentTabIdx];
-                            changeTab(activeView.id, activeView.filter, currentTabIdx);
-                            alert("Nama diubah!"); 
-                        }
-                    }
-                }
+              if (!currentActiveMedia) return alert('Buka file dulu!');
+              const n = prompt('Nama baru:', currentActiveMedia.name);
+              if (n) {
+                await ubahNamaMedia(currentActiveMedia.id, n);
+                currentActiveMedia.name = n;
+                alert('Nama diubah!');
+              }
             }
             else if (actionName === 'shareImage') {
                 alert("Memicu Android Share Sheet...");
             }
         }
     </script>
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script>
 </body>
 </html>
