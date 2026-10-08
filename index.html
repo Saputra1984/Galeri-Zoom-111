@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ai Picture - Galeri Zoom Extreme</title>
+    <title>Galeri Zoom Extreme</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     <style>
@@ -185,7 +185,7 @@
         // INTEGRASI BLUEPRINT DATA JSON KE MEMORI UTAMA
         const galleryConfig = {
             "app_metadata": {
-                "application_name": "Ai Picture - Galeri Zoom Extreme",
+                "application_name": "Galeri Zoom Extreme",
                 "version": "1.0.0",
                 "device_target": "Xiaomi 2GB RAM",
                 "stability_mode": "hardware_assisted"
@@ -206,8 +206,8 @@
                     "default_view": "images_grid",
                     "available_views": [
                         { "id": "images_grid", "label": "🖼️ Riwayat", "filter": "all" },
-                        { "id": "folders_grid", "label": "📁 Folder (Kain)", "filter": "image" },
-                        { "id": "file_manager_tree", "label": "🗂️ Memori (Video)", "filter": "video" }
+                        { "id": "folders_grid", "label": "📷 Foto", "filter": "image" },
+                        { "id": "file_manager_tree", "label": "🎬 Video", "filter": "video" }
                     ]
                 }
             },
@@ -257,69 +257,84 @@
 
         // AMAN RAM 2GB: Proses input gambar dengan proteksi penyimpanan penuh
         document.getElementById('file-input').addEventListener('change', async function(e) {
-          const files = e.target.files;
-          if (!files.length) return;
+            const files = e.target.files;
+            if (!files.length) return;
         
-          for (const file of files) {
-            await simpanMedia(file);
-          }
-          await loadSavedMedia();
+            for (const file of files) {
+                if (file.type.startsWith('video/')) {
+                    try {
+                        log?.('Memproses video...') || console.log('Memproses video...');
+                        await simpanVideo(file);
+                    } catch (err) {
+                        alert('Gagal simpan video: ' + err.message);
+                    }
+                } else {
+                    await simpanMedia(file);
+                }
+            }
+            await loadSavedMedia();
         });
 
         // BUKA GAMBAR & AKTIFKAN PEMBATAS INTERCEPT TOMBOL BACK HP
-        function renderActiveMedia(media) {
-          currentActiveMedia = media; // simpan object utuh
-          const img = document.getElementById('gallery-image');
-          const video = document.getElementById('gallery-video');
+        async function renderActiveMedia(media) {
+            // Kalau video, cek dulu apakah blob masih ada di DB
+            if (media.isVideo) {
+                const cek = await ambilMedia(media.id);
+                if (!cek || !cek.blob) {
+                    alert('⚠️ Video sudah dihapus (storage penuh).');
+                    // Hapus thumbnail yatim
+                    if (media.thumbBlob) await hapusMedia(media.id);
+                    await loadSavedMedia();
+                    return;
+                }
+                media = cek; // pakai data terbaru
+            }
         
-          document.getElementById('explorer-area').style.display = 'none';
-          document.getElementById('nav-header').style.display = 'none';
-        
-          const url = blobUrl(media.blob);
-        
-          if (media.type.startsWith('video/')) {
-            img.style.display = 'none'; img.src = '';
-            video.src = url; video.style.display = 'block'; video.play();
-          } else {
-            video.style.display = 'none'; video.pause(); video.src = '';
-            img.src = url; img.style.display = 'block';
-            
-            // Kirim pixel ke WASM
-            img.onload = () => {
-                if (!wasmReady) return;
-                if (srcPtr) { Module._free(srcPtr); srcPtr = 0; }
-            
-                srcW = img.naturalWidth;
-                srcH = img.naturalHeight;
-            
-                const off = document.createElement('canvas');
-                off.width = srcW; off.height = srcH;
-                const octx = off.getContext('2d');
-                octx.drawImage(img, 0, 0);
-                const imgData = octx.getImageData(0, 0, srcW, srcH);
-            
-                srcPtr = Module._malloc(imgData.data.length);
-                Module.HEAPU8.set(imgData.data, srcPtr);
-            
-                console.log('📸 Gambar dikirim ke WASM:', srcW + '×' + srcH);
+            currentActiveMedia = media;
+            currentFileObject = {
+                name: media.name,
+                type: media.type,
+                size: media.blob.size
             };
-          }
-          document.getElementById('zoom-badge').style.display = 'block';
-          resetTransform();
-          if (!history.state || !history.state.viewer) {
-              history.pushState({viewer: true}, '');
-          }
+        
+            const img = document.getElementById('gallery-image');
+            const video = document.getElementById('gallery-video');
+        
+            document.getElementById('explorer-area').style.display = 'none';
+            document.getElementById('nav-header').style.display = 'none';
+        
+            const url = blobUrl(media.blob);
+        
+            if (media.type.startsWith('video/')) {
+                img.style.display = 'none'; img.src = '';
+                video.src = url;
+                video.style.display = 'block';
+                video.play().catch(() => {});
+            } else {
+                video.style.display = 'none'; video.pause(); video.src = '';
+                img.src = url;
+                img.style.display = 'block';
+            }
+        
+            document.getElementById('zoom-badge').style.display = 'block';
+            resetTransform();
+        
+            if (!history.state || !history.state.viewer) {
+                history.pushState({ viewer: true }, '');
+            }
         }
 
         // Cek parameter URL saat halaman dibuka
         window.addEventListener('load', async () => {
-          const params = new URLSearchParams(location.search);
-          if (params.get('shared') === 'ok') {
-            // Bersihkan URL
-            history.replaceState({}, '', location.pathname);
-            await loadSavedMedia();
-            alert('✅ Gambar berhasil ditambahkan dari share!');
-          }
+            // Auto-cleanup video tua (kalau ada)
+            try {
+                const res = await cleanupVideo();
+                if (res.deleted > 0) {
+                    console.log(`🧹 Cleanup: ${res.deleted} video lama dihapus`);
+                }
+            } catch (e) { console.warn('Cleanup error', e); }
+        
+            // ... (kode existing: cek ?shared=, dll)
         });
 
         // Handler tombol back HP
@@ -363,31 +378,71 @@
 
         // MENAMPILKAN MEDIA BERDASARKAN FILTER SELEKTIF JSON
         async function loadSavedMedia() {
-          const gridContainer = document.getElementById('thumbnail-container');
-          const emptyPrompt = document.getElementById('empty-prompt');
-          gridContainer.innerHTML = '';
-          gridContainer.style.display = 'grid';
+            const gridContainer = document.getElementById('thumbnail-container');
+            const emptyPrompt = document.getElementById('empty-prompt');
         
-          const list = await ambilSemuaMedia();
-          savedMediaList = list; // array global (object, bukan string)
+            gridContainer.innerHTML = '';
+            gridContainer.style.display = 'grid';
         
-          if (list.length === 0) {
-            showEmptyState();
-            return;
-          }
-          emptyPrompt.style.display = 'none';
+            let list = await ambilSemuaMedia();
+            savedMediaList = list;
         
-          list.forEach((media) => {
-            const box = document.createElement('div');
-            box.className = 'grid-item';
-            // Pakai thumbBlob kalau ada, fallback ke blob asli
-            const url = blobUrl(media.thumbBlob || media.blob);
-            box.innerHTML = media.type.startsWith('video/')
-              ? `<video src="${url}#t=0.5" muted></video><div class="video-badge">VIDEO</div>`
-              : `<img src="${url}" loading="lazy">`;
-            box.onclick = () => renderActiveMedia(media);
-            gridContainer.appendChild(box);
-          });
+            if (list.length === 0) {
+                showEmptyState();
+                return;
+            }
+            emptyPrompt.style.display = 'none';
+        
+            // Proses video yang belum punya thumbnail
+            for (const m of list) {
+                if (m.isVideo && !m.thumbBlob && m.needsThumb) {
+                    try {
+                        const thumb = await generateVideoThumbnail(m.blob);
+                        await simpanThumbnail(m.id, thumb);
+                        m.thumbBlob = thumb;
+                        // Hapus flag needsThumb
+                        await new Promise((res) => {
+                            openDB().then(db => {
+                                const tx = db.transaction(STORE, 'readwrite');
+                                const store = tx.objectStore(STORE);
+                                const req = store.get(m.id);
+                                req.onsuccess = () => {
+                                    const item = req.result;
+                                    item.needsThumb = false;
+                                    store.put(item);
+                                    res();
+                                };
+                            });
+                        });
+                    } catch (e) {
+                        console.warn('Gagal thumbnail video', m.id, e);
+                    }
+                }
+            }
+        
+            list.forEach((media) => {
+                const box = document.createElement('div');
+                box.className = 'grid-item';
+        
+                let url = '';
+                let imgTag = '';
+        
+                if (media.isVideo) {
+                    if (media.thumbBlob) {
+                        url = blobUrl(media.thumbBlob);
+                    }
+                    imgTag = `<img src="${url}" loading="lazy" onerror="this.style.display='none'">` +
+                             `<div class="video-badge">▶️ VIDEO</div>` +
+                             (!media.thumbBlob ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#666;font-size:24px">▶️</div>` : '');
+                } else {
+                    url = blobUrl(media.thumbBlob || media.blob);
+                    imgTag = `<img src="${url}" loading="lazy">`;
+                }
+        
+                box.innerHTML = imgTag;
+                box.onclick = () => renderActiveMedia(media);
+                gridContainer.appendChild(box);
+            });
         }
 
         function showEmptyState() {
@@ -397,51 +452,82 @@
         }
 
         // NAVIGASI ADAPTIF ATAS (RIWAYAT, FOLDER FOTO, MEMORI VIDEO)
-        function changeTab(viewMode, filterType, indexIdx) {
+        async function changeTab(viewMode, filterType, indexIdx) {
             currentTabIdx = indexIdx;
             const tabs = document.querySelectorAll('.nav-tab');
             tabs.forEach(tab => tab.classList.remove('active'));
-            
+        
             const targetTab = document.getElementById(`tab-${viewMode}`);
-            if(targetTab) targetTab.classList.add('active');
-
-            if (filterType === 'all') {
-                loadSavedMedia();
-                return;
-            }
-
-            const localData = localStorage.getItem('galeri_extreme_db');
+            if (targetTab) targetTab.classList.add('active');
+        
             const gridContainer = document.getElementById('thumbnail-container');
             const emptyPrompt = document.getElementById('empty-prompt');
-            
-            gridContainer.innerHTML = "";
+            gridContainer.innerHTML = '';
             gridContainer.style.display = 'grid';
-
-            if (localData) {
-                savedMediaList = JSON.parse(localData);
-                const hasilSaring = savedMediaList.filter(item => item.type.startsWith(filterType + '/'));
-                
-                if(hasilSaring.length > 0) {
-                    emptyPrompt.style.display = 'none';
-                    hasilSaring.forEach((media) => {
-                        const indeksAsli = savedMediaList.findIndex(item => item.data === media.data);
-                        const box = document.createElement('div');
-                        box.className = "grid-item";
-                        box.onclick = () => renderActiveMedia(media.data, media.type, media.name, indeksAsli);
-                        box.innerHTML = media.type.startsWith('video/') ? 
-                            `<video src="${media.data}#t=0.5"></video><div class="video-badge">VIDEO</div>` : 
-                            `<img src="${media.data}">`;
-                        gridContainer.appendChild(box);
-                    });
-                } else {
-                    gridContainer.style.display = 'none';
-                    emptyPrompt.innerHTML = `📁 Mode <b>${viewMode === 'folders_grid' ? 'Folder Gambar Kain' : 'Memori Rekaman Video'}</b> Aktif.<br>Belum ada berkas berjenis ini dalam riwayat aplikasi.`;
-                    emptyPrompt.style.display = 'block';
-                }
-            } else {
+        
+            const all = await ambilSemuaMedia();
+        
+            let filtered;
+            if (filterType === 'all') filtered = all;
+            else if (filterType === 'image') filtered = all.filter(m => !m.isVideo);
+            else if (filterType === 'video') filtered = all.filter(m => m.isVideo);
+            else filtered = all;
+        
+            savedMediaList = filtered;
+        
+            if (filtered.length === 0) {
                 gridContainer.style.display = 'none';
-                showEmptyState();
+                if (filterType === 'video') {
+                    emptyPrompt.innerHTML = `
+                        🎬 Belum ada video di galeri.<br><br>
+                        <button class="btn-action" style="max-width:220px;margin:10px auto;display:block"
+                                onclick="document.getElementById('file-input').click()">
+                            🎬 Buka Video dari Galeri
+                        </button>
+                        <span style="font-size:10px;color:#666">
+                        Video disimpan di app (max 300 MB).<br>Yang lama otomatis terhapus.</span>
+                    `;
+                } else if (filterType === 'image') {
+                    emptyPrompt.innerHTML = `📷 Belum ada foto dalam riwayat.<br>Ketuk <b>"📂 Buka File"</b> atau <b>Share</b> dari galeri HP.`;
+                } else {
+                    showEmptyState();
+                }
+                emptyPrompt.style.display = 'block';
+                return;
             }
+        
+            emptyPrompt.style.display = 'none';
+        
+            // Render thumbnail (sama seperti loadSavedMedia, tapi pada list terfilter)
+            for (const m of filtered) {
+                if (m.isVideo && !m.thumbBlob && m.needsThumb) {
+                    try {
+                        const thumb = await generateVideoThumbnail(m.blob);
+                        await simpanThumbnail(m.id, thumb);
+                        m.thumbBlob = thumb;
+                    } catch (e) { console.warn(e); }
+                }
+            }
+        
+            filtered.forEach((media) => {
+                const box = document.createElement('div');
+                box.className = 'grid-item';
+                let imgTag = '';
+        
+                if (media.isVideo) {
+                    const url = media.thumbBlob ? blobUrl(media.thumbBlob) : '';
+                    imgTag = `<img src="${url}" loading="lazy" onerror="this.style.display='none'">` +
+                             `<div class="video-badge">▶️ VIDEO</div>` +
+                             (!media.thumbBlob ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#666;font-size:24px">▶️</div>` : '');
+                } else {
+                    const url = blobUrl(media.thumbBlob || media.blob);
+                    imgTag = `<img src="${url}" loading="lazy">`;
+                }
+        
+                box.innerHTML = imgTag;
+                box.onclick = () => renderActiveMedia(media);
+                gridContainer.appendChild(box);
+            });
         }
 
         // AKURASI PINCH ZOOM & TRANSLASI SKALA BERDASARKAN PARAMETER CONFIG
@@ -717,8 +803,16 @@
               tutupLayarZoom();
             }
             else if (actionName === 'showFileInfo') {
-                if (!currentFileObject) return alert("Buka file dulu!");
-                alert(`ℹ️ DETAIL BERKAS:\n• Nama: ${currentFileObject.name}\n• Tipe: ${currentFileObject.type}\n• Ukuran: ${(currentFileObject.size / (1024*1024)).toFixed(2)} MB`);
+                if (!currentActiveMedia) return alert("Buka file dulu!");
+                const ukuranMB = (currentActiveMedia.blob.size / (1024 * 1024)).toFixed(2);
+                const tanggal = new Date(currentActiveMedia.date).toLocaleString('id-ID');
+                alert(
+                    `ℹ️ DETAIL BERKAS\n` +
+                    `• Nama: ${currentActiveMedia.name}\n` +
+                    `• Tipe: ${currentActiveMedia.type}\n` +
+                    `• Ukuran: ${ukuranMB} MB\n` +
+                    `• Tanggal: ${tanggal}`
+                );
             }
             else if (actionName === 'renameFile') {
               if (!currentActiveMedia) return alert('Buka file dulu!');
@@ -730,7 +824,26 @@
               }
             }
             else if (actionName === 'shareImage') {
-                alert("Memicu Android Share Sheet...");
+                if (!currentActiveMedia) return alert("Buka file dulu!");
+                
+                const file = new File(
+                    [currentActiveMedia.blob],
+                    currentActiveMedia.name,
+                    { type: currentActiveMedia.type }
+                );
+                
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    navigator.share({
+                        files: [file],
+                        title: currentActiveMedia.name
+                    }).catch((err) => {
+                        if (err.name !== 'AbortError') {
+                            alert('Gagal share: ' + err.message);
+                        }
+                    });
+                } else {
+                    alert('HP ini tidak support share file dari web.');
+                }
             }
         }
 
@@ -750,7 +863,5 @@
             setTimeout(() => clearInterval(waitWasm), 10000);
         });
     </script>
-  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-  <script>eruda.init();</script>
 </body>
 </html>
