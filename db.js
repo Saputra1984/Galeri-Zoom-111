@@ -1,5 +1,5 @@
 // Modul IndexedDB untuk halaman utama
-const DB_NAME = 'aipicture_db';
+const DB_NAME = 'galerizoom_db';
 const DB_VERSION = 1;
 const STORE = 'media';
 
