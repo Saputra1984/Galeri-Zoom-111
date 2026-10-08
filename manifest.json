@@ -1,6 +1,6 @@
 {
-  "name": "Ai Picture - Galeri Zoom Extreme",
-  "short_name": "AiPicture",
+  "name": "Galeri Zoom Extreme",
+  "short_name": "Galeri Zoom",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
