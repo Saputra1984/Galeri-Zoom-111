@@ -70,7 +70,7 @@ async function handleShare(request) {
 
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('aipicture_db', 1);
+    const req = indexedDB.open('galerizoom_db', 1);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('media')) {
