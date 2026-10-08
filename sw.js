@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aipicture-v1';
+const CACHE_NAME = 'galerizoom-v1';
 const CORE = ['./', './index.html', './db.js'];
 
 self.addEventListener('install', (e) => {
@@ -36,10 +36,7 @@ async function handleShare(request) {
   try {
     const formData = await request.formData();
     const files = formData.getAll('media');
-
-    // Ambil base URL dari request supaya redirect relatif benar
     const url = new URL(request.url);
-    // Path tanpa '/share-target' → ini base PWA
     const basePath = url.pathname.replace(/\/share-target$/, '') || '/';
 
     if (files.length === 0) {
@@ -47,12 +44,17 @@ async function handleShare(request) {
     }
 
     const db = await openDB();
+
     for (const file of files) {
+      // Simpan mentah ke DB; thumbnail video akan di-generate di halaman utama
+      // karena Service Worker tidak punya akses ke DOM/video element.
       await addMedia(db, {
         name: file.name || 'shared_' + Date.now(),
         type: file.type,
         blob: file,
         thumbBlob: null,
+        isVideo: file.type.startsWith('video/'),
+        needsThumb: file.type.startsWith('video/'),
         date: Date.now()
       });
     }
