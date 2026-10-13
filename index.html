@@ -682,7 +682,6 @@
         if (!files.length) return;
         console.log(`📥 Menerima ${files.length} file`);
         
-        // ⭐ Pisahkan file subtitle dari media
         const subtitleFiles = [];
         const mediaFiles = [];
         for (const f of files) {
@@ -691,13 +690,11 @@
             else mediaFiles.push(f);
         }
         
-        // ⭐ Kalau ada subtitle, simpan untuk dipakai nanti
         if (subtitleFiles.length > 0) {
             window._pendingSubtitle = subtitleFiles[0];
             console.log(`📝 Subtitle terdeteksi: ${subtitleFiles[0].name}`);
         }
         
-        // ⭐ Kalau cuma subtitle tanpa media → tidak ada yang bisa disimpan
         if (mediaFiles.length === 0) {
             console.warn('Hanya file subtitle yang dipilih — tidak ada media untuk disimpan');
             alert('File subtitle saja tidak bisa diproses. Pilih juga video/gambarnya.');
@@ -708,14 +705,12 @@
         for (const file of mediaFiles) {
             console.log(`📄 File: ${file.name} | ${file.type} | ${(file.size/1024/1024).toFixed(2)} MB`);
         
-            // ⭐ Klasifikasi file sebelum diproses
             const cls = await classifyFile(file);
             if (!cls.ok) {
                 console.log(`⏭️ Skip: ${file.name} — ${cls.reason}`);
                 continue;
             }
         
-            // Update tipe file kalau probe mendeteksi MIME baru
             if (cls.mime && (!file.type || file.type === 'application/octet-stream')) {
                 try {
                     const newFile = new File([file], file.name, { type: cls.mime });
@@ -797,7 +792,6 @@
                     }
                 } catch (e) { console.warn('Thumb gagal', m.id, e); }
             }
-            // ⭐ Gambar thumbnail (BARU)
             else if (!m.isVideo && !m.thumbBlob && m.blob) {
                 try {
                     const thumb = await generateImageThumbnail(m.blob);
@@ -854,11 +848,9 @@
                     const url = blobUrl(media.thumbBlob);
                     imgTag = `<img src="${url}" loading="lazy">`;
                 } else if (media.blob) {
-                    // Gambar tanpa thumbnail → pakai blob asli
                     const url = blobUrl(media.blob);
                     imgTag = `<img src="${url}" loading="lazy">`;
                 } else {
-                    // Gambar tanpa blob (kasus langka) → placeholder
                     imgTag = `<div style="
                         position:absolute;inset:0;
                         background:linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
@@ -983,11 +975,9 @@
                 return;
             }
         
-            // ⭐ FIX: Set video.src ke URL yang berhasil dari probe
             video.src = probeResult.url;
-            video.load();   // paksa reload metadata
+            video.load();
 
-            // ⭐ Atur loop: kalau ada next → jangan loop, biar bisa auto-play
             try {
                 const videos = await getVideoList();
                 const idx = videos.findIndex(v => v.id === media.id);
@@ -995,7 +985,7 @@
                 video.loop = !hasNext;
                 console.log(`🎬 Loop: ${video.loop ? 'on (video terakhir)' : 'off (ada next)'}`);
             } catch (e) {
-                video.loop = true;  // fallback
+                video.loop = true;
             }
 
             // Tunggu video siap sebelum play
@@ -1062,9 +1052,7 @@
                 return;
             }
         
-            // ✅ Video OK
             updateProgress('Zoom: 1.0x');
-            // ⭐ Auto-play next setelah selesai (cuma sekali pasang)
             if (!video._hasEndedListener) {
                 video._hasEndedListener = true;
                 video.addEventListener('ended', () => {
@@ -1082,7 +1070,6 @@
             img.style.display = 'block';
             img.onload = () => loadImageToWasm(img);
         
-            // ⭐ Restore toolbar app, sembunyikan overlay video
             document.querySelector('.bottom-toolbar').style.display = 'flex';
             hideVideoOverlay();
             document.getElementById('subtitle-display').style.display = 'none';
@@ -1092,7 +1079,6 @@
         document.getElementById('zoom-badge').style.display = 'block';
         resetTransform();
         
-        // ⭐ Restore zoom video (kalau pindah dari video lain)
         if (savedVideoZoom && media.isVideo) {
             zoomScale = savedVideoZoom.scale;
             panX = savedVideoZoom.panX;
@@ -1234,7 +1220,6 @@
         const view = new Uint8ClampedArray(Module.HEAPU8.buffer, dstPtr, bytes);
         canvasImageData.data.set(view);
         canvasCtx.putImageData(canvasImageData, 0, 0);
-        // ⭐ Skip kalau parameter render sama
         const key = `${offsetX.toFixed(3)}_${offsetY.toFixed(3)}_${totalZoom.toFixed(3)}_${cw}_${ch}`;
         if (key === lastRenderKey) return;
         lastRenderKey = key;
@@ -1243,7 +1228,6 @@
             `Zoom: ${zoomScale.toFixed(1)}x | ${(t1 - t0).toFixed(0)}ms`;
     }
 
-    // ⭐ FIX: jangan sentuh display img/video — biarkan sesuai media yang aktif
     function resetTransform() {
         zoomScale = galleryConfig.zoom_config.min_scale;
         panX = 0; panY = 0;
@@ -1318,10 +1302,9 @@
             zoomScale = newZoom;
         }
     
-        // ⭐ Batalkan interaksi supaya WASM langsung render
         isInteracting = false;
         if (idleRenderTimer) clearTimeout(idleRenderTimer);
-        lastRenderKey = '';   // paksa render ulang
+        lastRenderKey = '';
     
         updateTransform();
         updateZoomBadge(`Zoom: ${zoomScale.toFixed(1)}x`, true);
@@ -1336,7 +1319,6 @@
     
     function applyColorMode(mode) {
         const cssFilter = mode.filter === 'none' ? '' : mode.filter;
-        // ⭐ Terapkan ke 3 elemen (img, video, canvas)
         ['gallery-image', 'gallery-video', 'gallery-canvas'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.filter = cssFilter;
@@ -1372,11 +1354,9 @@
     function initTouchSensors() {
         const core = document.getElementById('viewer-core');
     
-        // ═══ STATE UNTUK TAP vs DRAG ═══
         let tapStartX = 0, tapStartY = 0, tapStartTime = 0, tapMoved = false;
     
         core.addEventListener('touchstart', (e) => {
-            // ═══ TAP TRACKING (untuk video & foto) ═══
             if (e.touches.length === 1) {
                 tapStartX = e.touches[0].clientX;
                 tapStartY = e.touches[0].clientY;
@@ -1384,7 +1364,6 @@
                 tapMoved = false;
             }
     
-            // ═══ 2 JARI → PINCH ZOOM (video & foto) ═══
             if (e.touches.length === 2) {
                 isDragging = false;
                 hideCoordBadge();
@@ -1396,7 +1375,6 @@
                 return;
             }
     
-            // ═══ 1 JARI ═══
             if (e.touches.length === 1) {
                 const tx = e.touches[0].clientX;
                 const ty = e.touches[0].clientY;
@@ -1408,12 +1386,11 @@
                     e.preventDefault();
                     lastTapTime = 0;
                     isDragging = false;
-                    tapMoved = true; // cegah toggle overlay setelah double-tap
+                    tapMoved = true;
                     return;
                 }
                 lastTapTime = now;
     
-                // VIDEO: drag = pan kalau zoom > 1
                 if (isVideoActive()) {
                     if (zoomScale > 1) {
                         isDragging = true;
@@ -1423,7 +1400,6 @@
                     return;
                 }
     
-                // FOTO: perilaku seperti biasa
                 showCoordBadge(tx, ty);
                 isDragging = true;
                 startX = tx - panX;
@@ -1432,14 +1408,12 @@
         }, { passive: false });
     
         core.addEventListener('touchmove', (e) => {
-            // ═══ CEK APAKAH TAP MASIH TAP ═══
             if (e.touches.length === 1 && !tapMoved) {
                 const dx = e.touches[0].clientX - tapStartX;
                 const dy = e.touches[0].clientY - tapStartY;
                 if (dx * dx + dy * dy > 400) tapMoved = true; // >20px dianggap drag
             }
     
-            // ═══ 2 JARI → PINCH (video & foto) ═══
             if (e.touches.length === 2) {
                 if (e.cancelable) e.preventDefault();
                 const t = e.touches;
@@ -1453,7 +1427,6 @@
                 return;
             }
     
-            // ═══ 1 JARI ═══
             if (e.touches.length === 1) {
                 if (isVideoActive()) {
                     // Video: pan kalau dragging
@@ -1467,7 +1440,6 @@
                     return;
                 }
     
-                // Foto: perilaku biasa
                 if (e.cancelable) e.preventDefault();
                 const t = e.touches;
                 pendingTouch = {
@@ -1481,17 +1453,14 @@
         }, { passive: false });
     
         core.addEventListener('touchend', (e) => {
-            // ═══ TAP → TOGGLE OVERLAY (khusus video) ═══
             if (isVideoActive() && e.touches.length === 0) {
                 const dur = Date.now() - tapStartTime;
                 if (dur < 300 && !tapMoved) {
-                    // Tap valid → toggle overlay
                     toggleVideoOverlay();
                     return;
                 }
             }
     
-            // Reset state
             if (e.touches.length === 0) {
                 isDragging = false;
                 if (zoomScale === 1) { panX = 0; panY = 0; }
@@ -1510,7 +1479,6 @@
             updateTransform();
         });
     
-        // ═══ processPendingTouch — handle pinch & pan ═══
         function processPendingTouch() {
             touchRaf = 0;
             if (!pendingTouch) return;
@@ -1519,7 +1487,6 @@
             const cfg = galleryConfig.zoom_config;
     
             if (p.n === 1) {
-                // PAN
                 markInteracting();
                 const isVideo = isVideoActive();
                 if (!isVideo) showCoordBadge(p.x0, p.y0);
@@ -1543,7 +1510,6 @@
                     document.getElementById('gallery-canvas').style.display = 'none';
                 }
             } else if (p.n === 2) {
-                // PINCH ZOOM
                 markInteracting();
                 const mx = (p.x0 + p.x1) / 2;
                 const my = (p.y0 + p.y1) / 2;
@@ -1665,7 +1631,6 @@
                 }
                 
                 if (target === 0) {
-                    // Tidak bisa seek — langsung gambar frame sekarang
                     drawFrame();
                 } else {
                     video.currentTime = target;
@@ -1673,7 +1638,6 @@
             };
     
             video.onseeked = () => {
-                // Delay kecil biar compositor sempat render frame
                 requestAnimationFrame(() => setTimeout(drawFrame, 50));
             };
     
@@ -1890,11 +1854,9 @@
                         console.log('✅ Landscape terkunci');
                     } catch (e) {
                         console.warn('Tidak bisa lock landscape:', e.message);
-                        // Tidak fatal — fullscreen tetap jalan, cuma portrait
                     }
                 }
             } else {
-                // KELUAR fullscreen
                 if (screen.orientation && screen.orientation.unlock) {
                     try { screen.orientation.unlock(); } catch {}
                 }
@@ -1920,9 +1882,7 @@
         }
     });
     
-    // ═══════════════════════════════════════════════════════
-    // VIDEO OVERLAY — Kontrol player dengan auto-hide
-    // ═══════════════════════════════════════════════════════
+    // === VIDEO OVERLAY — Kontrol player dengan auto-hide ===
     function isVideoActive() {
         return currentActiveMedia
             && currentActiveMedia.type
@@ -2013,9 +1973,8 @@
             scheduleHideOverlay();
         }, { passive: true });
     
-        // Kalau video pause sendiri, tampilkan overlay
         video.addEventListener('pause', () => {
-            showVideoOverlay(false);  // tampil tapi jangan auto-hide
+            showVideoOverlay(false);
         });
     }
     
@@ -2105,7 +2064,6 @@
     ];
     
     // Coba load video dengan MIME tertentu
-    // Return Promise yang resolve kalau berhasil, reject kalau gagal
     function tryLoadVideo(videoEl, blob, mimeType, timeoutMs = 4000) {
         return new Promise((resolve, reject) => {
             const newBlob = mimeType ? new Blob([blob], { type: mimeType }) : blob;
@@ -2128,7 +2086,6 @@
     
             const onLoaded = () => {
                 if (settled) return;
-                // Cek durasi valid (> 0 atau Infinity untuk live)
                 const dur = videoEl.duration;
                 if (!dur || isNaN(dur) || dur <= 0) {
                     cleanup();
@@ -2158,9 +2115,8 @@
         });
     }
     
-    // Coba semua MIME dalam chain
+    // Coba semua MIME dalam chain jangan video asli
     async function probeVideo(blob) {
-        // Buat video element temporary (jangan ganggu video utama)
         const tester = document.createElement('video');
         tester.preload = 'metadata';
         tester.muted = true;
@@ -2169,7 +2125,6 @@
         const results = [];
     
         for (const mime of VIDEO_MIME_CHAIN) {
-            // Skip MIME yang browser bilang tidak support sama sekali
             if (mime && tester.canPlayType(mime) === '') {
                 console.log(`⏭️ Skip ${mime} (browser tolak)`);
                 continue;
@@ -2189,13 +2144,8 @@
         return null;
     }
 
-    // ═══════════════════════════════════════════════════════
-    // DETEKSI VIDEO TIDAK BISA DI-DECODE (layar hitam)
-    // ═══════════════════════════════════════════════════════
-    
-    // Setelah video.play(), tunggu ~800ms lalu cek apakah frame benar-benar muncul
+    // DETEKSI VIDEO TIDAK BISA DI-DECODE (layar hitam) Setelah video.play(), tunggu ~800ms
     async function detectBlackScreen(videoEl) {
-        // Tunggu `loadeddata` event — frame pertama siap
         const waitForData = await new Promise((resolve) => {
             if (videoEl.readyState >= 2) {
                 return resolve({ ok: true });
@@ -2222,7 +2172,6 @@
     
         if (!waitForData.ok) return waitForData;
     
-        // Sekarang cek videoWidth/Height — harus > 0
         if (!videoEl.videoWidth || !videoEl.videoHeight) {
             return { ok: false, reason: `videoWidth/Height = 0 setelah loadeddata (codec tidak didukung)` };
         }
@@ -2230,10 +2179,7 @@
         return { ok: true };
     }
 
-    // ═══════════════════════════════════════════════════════
-    // SUBTITLE SUPPORT (SRT/VTT)
-    // ═══════════════════════════════════════════════════════
-    // Konversi waktu format SRT "00:00:01,500" → detik (1.5)
+    // ====== SUBTITLE SUPPORT (SRT/VTT) ======
     function parseSubtitleTime(str) {
         str = str.trim().replace(',', '.');
         const parts = str.split(':').map(parseFloat);
@@ -2245,14 +2191,11 @@
     // Parse SRT (SubRip)
     function parseSRT(text) {
         const cues = [];
-        // Normalisasi line endings
         text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        // Split by blank lines
         const blocks = text.split(/\n\n+/);
         for (const block of blocks) {
             const lines = block.split('\n').filter(l => l.trim());
             if (lines.length < 2) continue;
-            // Cari baris waktu (mengandung -->)
             let timeLineIdx = lines.findIndex(l => l.includes('-->'));
             if (timeLineIdx === -1) continue;
             const timeLine = lines[timeLineIdx];
@@ -2269,9 +2212,7 @@
     
     // Parse VTT (WebVTT) — mirip SRT tapi header beda
     function parseVTT(text) {
-        // Buang header WEBVTT
         text = text.replace(/^WEBVTT.*?\n\n/s, '');
-        // Sama seperti SRT setelah itu
         return parseSRT(text);
     }
     
@@ -2285,7 +2226,6 @@
     async function loadSubtitleFile(file) {
         try {
             let text = await file.text();
-            // Kalau ada BOM, buang
             if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
             subtitleCues = parseSubtitleFile(text);
             if (subtitleCues.length === 0) {
@@ -2330,7 +2270,6 @@
                 return;
             }
             const t = video.currentTime;
-            // Cari cue yang cocok
             let found = null;
             for (const cue of subtitleCues) {
                 if (t >= cue.start && t <= cue.end) {
@@ -2341,7 +2280,6 @@
             display.textContent = found ? found.text : '';
         }
     
-        // Update 4× per detik (cukup untuk subtitle)
         subtitleUpdateTimer = setInterval(update, 250);
         update();
     }
@@ -2378,18 +2316,11 @@
         setTimeout(() => t.remove(), 2200);
     }
     
-    // ═══ Auto-detect: kalau user pilih video + srt bersama ═══
-    // Kita modifikasi file-input handler untuk cek pasangan
     (function patchFileInputForSubtitles() {
         const originalHandler = document.getElementById('file-input');
-        // Simpan referensi onchange lama tidak bisa (arrow function),
-        // jadi kita biarkan saja. Deteksi subtitle di file handler secara implisit.
     })();
 
-    // ═══════════════════════════════════════════════════════
-    // NEXT / PREV VIDEO + AUTO-PLAY
-    // ═══════════════════════════════════════════════════════
-    
+    // ====== NEXT / PREV VIDEO + AUTO-PLAY ======
     async function getVideoList() {
         const all = await ambilMetadataSemuaMedia();
         return all.filter(m => m.isVideo);
@@ -2412,11 +2343,9 @@
         const target = videos[targetIdx];
         console.log(`🎬 Pindah ke video: ${target.name}`);
         
-        // Stop video sekarang dulu
         const video = document.getElementById('gallery-video');
         try { if (!video.paused) video.pause(); } catch {}
         
-        // Render video baru (fungsi existing, tidak diubah)
         await renderActiveMedia(target);
     }
     
@@ -2428,7 +2357,6 @@
     
         if (idx >= 0 && idx < videos.length - 1) {
             console.log('⏭ Auto-play video berikutnya...');
-            // ⭐ Pakai goToVideo biar capture+restore konsisten
             await goToVideo(1);
         } else {
             console.log('🏁 Video terakhir, looping sendiri');
@@ -2439,9 +2367,7 @@
         }
     }
 
-    // ═══════════════════════════════════════════════════════
     // LONG-PRESS CONTEXT MENU (di grid item)
-    // ═══════════════════════════════════════════════════════
     function ensureContextMenuDOM() {
         if (document.getElementById('context-menu')) return;
         
@@ -2469,7 +2395,6 @@
             await handleContextAction(action);
         });
         
-        // Reset timeout kalau user interaksi
         menu.addEventListener('touchstart', () => {
             if (contextMenuTimeout) clearTimeout(contextMenuTimeout);
             contextMenuTimeout = setTimeout(hideContextMenu, 4000);
@@ -2504,7 +2429,6 @@
         menu.style.left = left + 'px';
         menu.style.top = top + 'px';
         
-        // Auto-hide 4 detik
         if (contextMenuTimeout) clearTimeout(contextMenuTimeout);
         contextMenuTimeout = setTimeout(hideContextMenu, 4000);
     }
@@ -2612,7 +2536,6 @@
         box.addEventListener('mouseleave', cancelLP);
         box.addEventListener('contextmenu', (e) => e.preventDefault());
         
-        // Klik biasa → buka viewer (kecuali habis long-press)
         box.onclick = () => {
             if (lpFired) { lpFired = false; return; }
             renderActiveMedia(media);
