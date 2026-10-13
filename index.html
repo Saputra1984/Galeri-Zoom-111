@@ -6,862 +6,2628 @@
     <title>Galeri Zoom Extreme</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-        body, html { width: 100%; height: 100%; background: #000000; font-family: -apple-system, Sans-Serif; overflow: hidden; color: #ffffff; }
 
-        /* --- 1. GERBANG TAMPILAN DEPAN --- */
+    <style>
+        /* ═════════ RESET & BASE ═════════ */
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        body, html {
+            width: 100%; height: 100%;
+            background: #000; color: #fff;
+            font-family: -apple-system, Sans-Serif;
+            overflow: hidden;
+        }
+
+        /* ═════════ NAVIGASI ATAS ═════════ */
         .navigation-header {
-            position: absolute;
-            top: 0; left: 0; width: 100%;
-            height: 50px; background: rgba(15, 15, 15, 0.9);
-            display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 20; backdrop-filter: blur(10px);
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 50px;
+            background: rgba(15, 15, 15, 0.9);
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 20;
+            backdrop-filter: blur(10px);
         }
         .nav-tab {
             flex: 1; text-align: center; line-height: 50px;
             font-size: 13px; font-weight: bold; color: #888;
             cursor: pointer; transition: all 0.2s;
         }
-        .nav-tab.active { color: #00e5ff; border-bottom: 2px solid #00e5ff; background: rgba(255, 255, 255, 0.02); }
+        .nav-tab.active { color: #00e5ff; border-bottom: 2px solid #00e5ff; background: rgba(255,255,255,0.02); }
 
-        /* Area Grid Gambar Mini (Thumbnail) */
+        /* ═════════ EXPLORER / GRID ═════════ */
         .explorer-view {
-            position: absolute;
-            top: 50px; bottom: 80px; width: 100%;
+            position: absolute; top: 50px; bottom: 80px; width: 100%;
             padding: 10px; overflow-y: auto;
             background: #050505; z-index: 15;
         }
-        
-        /* Grid Layout Responsif untuk RAM 2GB */
         .gallery-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 6px;
         }
         .grid-item {
-            width: 100%;
-            aspect-ratio: 1;
-            background: #111;
-            border-radius: 6px;
+            width: 100%; aspect-ratio: 1;
+            background: #111; border-radius: 6px;
             overflow: hidden;
             border: 1px solid rgba(255,255,255,0.05);
             position: relative;
         }
-        .grid-item img, .grid-item video {
-            width: 100%; height: 100%; object-fit: cover;
-        }
+        .grid-item img, .grid-item video { width: 100%; height: 100%; object-fit: cover; }
         .video-badge {
             position: absolute; top: 4px; right: 4px;
             background: rgba(0,0,0,0.7); color: #fff;
             font-size: 9px; padding: 2px 4px; border-radius: 4px;
         }
-
-        /* --- 2. RUANG UTAMA ZOOM EXTREME --- */
-        .viewer-container { 
-            width: 100%; height: 100%; 
-            position: absolute; top: 0; left: 0;
-            display: flex; justify-content: center; align-items: center; 
-            overflow: hidden; background: #000000; z-index: 5;
+        .placeholder-text {
+            color: #666; font-size: 12px; text-align: center;
+            padding: 40px 20px; line-height: 1.8; width: 100%;
         }
-        #gallery-image, #gallery-video { 
-            max-width: 100%; max-height: 100%; 
-            object-fit: contain; display: none;
+
+        /* ═════════ VIEWER (ZOOM) ═════════ */
+        .viewer-container {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden;
+            background: #000; z-index: 5;
+            touch-action: none;
+        }
+        #gallery-image, #gallery-video {
+            max-width: 100%; max-height: 100%;
+            object-fit: contain;
+            display: none;
             transform-origin: center center;
             transition: transform 0.02s ease-out;
         }
+        #gallery-canvas {
+            max-width: 100%; max-height: 100%;
+            display: none;
+            transform-origin: center center;
+        }
+        /* GPU acceleration hints */
+        #gallery-image, #gallery-video, #gallery-canvas {
+            will-change: transform;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
 
-        .placeholder-text { color: #666; font-size: 12px; text-align: center; padding: 40px 20px; line-height: 1.8; width: 100%; }
+        /* ═══════════ BADGE ═══════════ */
+        #zoom-badge {
+            position: absolute; top: 65px; left: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #00e5ff;
+            padding: 4px 10px; border-radius: 10px;
+            font-size: 12px; font-weight: bold; font-family: monospace;
+            z-index: 22;
+            border: 1px solid rgba(0, 229, 255, 0.3);
+            display: none; pointer-events: none;
+            contain: layout style paint;
+        }
+        #coord-badge {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.85);
+            color: #00e5ff;
+            padding: 5px 10px; border-radius: 8px;
+            font-size: 11px; font-weight: bold; font-family: monospace;
+            z-index: 26;
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            display: none; pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -140%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+            contain: layout style paint;
+        }
 
-        /* --- 3. CONTROLLER BAWAH --- */
+        /* ═════════ TOOLBAR BAWAH ═════════ */
         .bottom-toolbar {
             position: absolute; bottom: 20px; left: 50%;
-            transform: translateX(-50%); display: flex;
-            gap: 8px; z-index: 25; width: 92%; justify-content: center;
+            transform: translateX(-50%);
+            display: flex; gap: 8px;
+            z-index: 25; width: 92%; justify-content: center;
         }
         .btn-action {
             background: rgba(30, 30, 30, 0.75);
             border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #fff; padding: 12px 14px; border-radius: 20px;
-            font-size: 11px; font-weight: bold; cursor: pointer;
-            backdrop-filter: blur(8px); flex: 1; text-align: center;
+            color: #fff;
+            padding: 12px 14px; border-radius: 20px;
+            font-size: 11px; font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            flex: 1; text-align: center;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
         .btn-action:active { background: #00e5ff; color: #000; border-color: #00e5ff; }
         .btn-more-trigger { max-width: 45px; font-size: 14px; }
 
+        /* ═════════ SUB MENU POPUP ════════ */
         .sub-menu-popup {
             position: absolute; bottom: 70px; right: 4%;
-            width: 160px; background: rgba(20, 20, 20, 0.95);
+            width: 160px;
+            background: rgba(20, 20, 20, 0.95);
             border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 12px; display: none; flex-direction: column;
-            z-index: 30; backdrop-filter: blur(12px);
+            border-radius: 12px;
+            display: none; flex-direction: column;
+            z-index: 30;
+            backdrop-filter: blur(12px);
         }
         .sub-menu-item {
-            padding: 14px 16px; font-size: 12px; color: #eee;
+            padding: 14px 16px;
+            font-size: 12px; color: #eee;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             cursor: pointer;
         }
         .sub-menu-item:last-child { border-bottom: none; color: #ff3b30; }
         .sub-menu-item:active { background: rgba(0, 229, 255, 0.15); color: #00e5ff; }
 
+        /* ═══════════ FILE INPUT ═══════════ */
         #file-input { display: none; }
+
+        /* ═══════════ LOG PANEL ═══════════ */
+        #log-fab {
+            position: fixed; top: 70px; right: 12px;
+            width: 42px; height: 42px; border-radius: 50%;
+            background: rgba(20, 20, 20, 0.9); color: #00e5ff;
+            border: 1px solid rgba(0, 229, 255, 0.5);
+            font-size: 18px; z-index: 9998;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            cursor: pointer;
+        }
+        #log-panel {
+            position: fixed; inset: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 9999;
+            display: none; flex-direction: column;
+            padding: 8px;
+            font-family: monospace;
+        }
+        #log-panel .log-tools {
+            display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;
+        }
+        #log-panel .log-tools button {
+            padding: 10px; border: none; border-radius: 8px;
+            font-weight: bold; font-size: 12px;
+        }
+        #log-content {
+            flex: 1; overflow-y: auto;
+            background: #050505; color: #ccc;
+            padding: 8px; border-radius: 6px;
+            font-size: 10px; line-height: 1.4;
+            white-space: pre-wrap; word-break: break-all;
+            user-select: text; -webkit-user-select: text;
+            -webkit-touch-callout: default;
+            margin: 0;
+        }
+        #gallery-image, #gallery-video {
+            max-width: 100%; max-height: 100%;
+            object-fit: contain;
+            display: none;
+            transform-origin: center center;
+            transition: transform 0.02s ease-out;   /* ← HAPUS BARIS INI */
+        }
+
+        /* ═════════ VIDEO OVERLAY ═════════ */
+        .video-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 28;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+        .video-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        /* Top bar — playback rate */
+        .video-top-bar {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.65);
+            padding: 5px 6px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 96%;
+            pointer-events: auto;
+        }
+        .video-top-bar button {
+            background: rgba(40, 40, 40, 0.9);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            min-width: 34px;
+            transition: all 0.15s;
+        }
+        .video-top-bar button:active {
+            background: rgba(0, 229, 255, 0.3);
+        }
+        .video-top-bar button.active {
+            background: #00e5ff;
+            color: #000;
+            border-color: #00e5ff;
+        }
+
+        /* ═══ CENTER CONTROLS (play/pause) ═══ */
+        .video-center-controls {
+            position: absolute;
+            top: 42%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            pointer-events: auto;
+            z-index: 5;
+        }
+        .video-btn-big {
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-radius: 50%;
+            width: 56px;
+            height: 56px;
+            font-size: 22px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+            -webkit-tap-highlight-color: transparent;
+            padding: 0;
+        }
+        .video-btn-big:active {
+            background: rgba(0, 229, 255, 0.5);
+            transform: scale(0.92);
+        }
+        .video-btn-play {
+            width: 78px;
+            height: 78px;
+            font-size: 30px;
+            background: rgba(0, 229, 255, 0.85);
+            color: #000;
+            border-color: #00e5ff;
+            padding-left: 4px;   /* ⭐ biar ikon ▶ terlihat di tengah */
+        }
+        .video-btn-play:active {
+            background: rgba(0, 229, 255, 0.6);
+            padding-left: 4px;
+        }
+
+        /* Bottom bar — seek + transport */
+        .video-bottom-bar {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 8px 12px;
+            border-radius: 14px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 94%;
+            max-width: 700px;
+            pointer-events: auto;
+        }
+        .video-time {
+            font-family: monospace;
+            font-size: 11px;
+            color: #fff;
+            min-width: 40px;
+            text-align: center;
+            letter-spacing: -0.5px;
+        }
+        .video-seek {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .video-seek::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #00e5ff;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+        }
+        .video-seek::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #00e5ff;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+        .video-btn {
+            background: rgba(40, 40, 40, 0.9);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 40px;
+            transition: all 0.15s;
+        }
+        .video-btn:active {
+            background: #00e5ff;
+            color: #000;
+        }
+
+        /* ═══════════ SUBTITLE ═══════════ */
+        .subtitle-display {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 92%;
+            text-align: center;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 
+                -1px -1px 0 #000, 
+                1px -1px 0 #000, 
+                -1px 1px 0 #000, 
+                1px 1px 0 #000,
+                0 2px 4px rgba(0,0,0,0.9);
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.45);
+            border-radius: 8px;
+            backdrop-filter: blur(4px);
+            line-height: 1.4;
+            pointer-events: none;
+            z-index: 26;
+            white-space: pre-line;
+        }
+        .subtitle-display:empty {
+            display: none !important;
+        }
+
+        /* ═══ CONTEXT MENU (long-press) ═════ */
+        #context-menu {
+            position: fixed;
+            background: rgba(20, 20, 20, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 6px 0;
+            z-index: 9999;
+            min-width: 170px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            animation: ctxFadeIn 0.15s ease;
+            display: none;
+        }
+        @keyframes ctxFadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .ctx-item {
+            padding: 12px 16px;
+            color: #eee;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            user-select: none;
+        }
+        .ctx-item:active {
+            background: rgba(0, 229, 255, 0.15);
+        }
+        .ctx-item.danger {
+            color: #ff3b30;
+        }
+        #ctx-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 9998;
+            background: rgba(0, 0, 0, 0.3);
+            display: none;
+        }
     </style>
     <script src="./zoom_wasm.js"></script>
 </head>
 <body>
-
+    <!-- ═══ NAV ═══ -->
     <div class="navigation-header" id="nav-header"></div>
 
+    <!-- ═══ EXPLORER ═══ -->
     <div class="explorer-view" id="explorer-area">
         <div class="gallery-grid" id="thumbnail-container"></div>
         <div class="placeholder-text" id="empty-prompt"></div>
     </div>
 
+    <!-- ═══ VIEWER ═══ -->
     <div class="viewer-container" id="viewer-core">
         <img id="gallery-image" src="" alt="Extreme Zoom Core">
-        <video id="gallery-video" playsinline loop></video>
-        <canvas id="gallery-canvas" style="
-            max-width: 100%; max-height: 100%;
-            display: none;
-            transform-origin: center center;
-        "></canvas>
+        <video id="gallery-video" playsinline loop webkit-playsinline></video>
+        <canvas id="gallery-canvas"></canvas>
+    
+        <!-- ═══ VIDEO OVERLAY ═══ -->
+        <div id="video-overlay" class="video-overlay" style="display:none;">
+        
+            <!-- Top: playback rate -->
+            <div class="video-top-bar">
+                <button onclick="promptSubtitle()" title="Teks/Subtitle">📝</button>
+                <button data-rate="0.1"  onclick="videoAction('rate', 0.1)">0.1x</button>
+                <button data-rate="0.25" onclick="videoAction('rate', 0.25)">0.25x</button>
+                <button data-rate="0.5"  onclick="videoAction('rate', 0.5)">0.5x</button>
+                <button data-rate="1"    onclick="videoAction('rate', 1)" class="active">1x</button>
+                <button data-rate="1.5"  onclick="videoAction('rate', 1.5)">1.5x</button>
+                <button data-rate="2"    onclick="videoAction('rate', 2)">2x</button>
+                <button data-rate="4"    onclick="videoAction('rate', 4)">4x</button>
+                <button onclick="cycleColorMode()" title="Mode warna">🎨</button>
+            </div>
+        
+            <!-- Center: transport control -->
+            <div class="video-center-controls">
+                <button onclick="videoAction('prevvideo')" class="video-btn-big">⏮</button>
+                <button onclick="videoAction('rewind')" class="video-btn-big">◀◀</button>
+                <button id="video-play-btn" onclick="videoAction('toggleplay')" class="video-btn-big video-btn-play">▶</button>
+                <button onclick="videoAction('forward')" class="video-btn-big">▶▶</button>
+                <button onclick="videoAction('nextvideo')" class="video-btn-big">⏭</button>
+            </div>
+        
+            <!-- Bottom: seek bar + fullscreen -->
+            <div class="video-bottom-bar">
+                <span id="video-time-current" class="video-time">0:00</span>
+                <input type="range" id="video-seek" class="video-seek" min="0" max="1000" value="0" step="1">
+                <span id="video-time-total" class="video-time">0:00</span>
+                <button onclick="videoAction('fullscreen')" class="video-btn">⛶</button>
+            </div>
+        
+        </div>
+        <!-- ═══ SUBTITLE OVERLAY ═══ -->
+        <div id="subtitle-display" class="subtitle-display" style="display:none;"></div>
+
+        <!-- ═══ INPUT FILE SUBTITLE (hidden) ═══ -->
+        <input type="file" id="subtitle-input" accept=".srt,.vtt,.ass,.ssa,text/vtt" style="display:none;">
     </div>
 
+    <!-- ═══ SUB MENU ═══ -->
     <div class="sub-menu-popup" id="more-menu-popup">
+        <div class="sub-menu-item" onclick="upscaleImage(2)">📐 Upscale 2× (2K)</div>
+        <div class="sub-menu-item" onclick="upscaleImage(3)">📐 Upscale 3× (3K)</div>
+        <div class="sub-menu-item" onclick="upscaleImage(4)">📐 Upscale 4× (4K+)</div>
         <div class="sub-menu-item" onclick="triggerAction('showFileInfo')">❗ Info File</div>
         <div class="sub-menu-item" onclick="triggerAction('renameFile')">✏️ Ubah Nama</div>
         <div class="sub-menu-item" onclick="triggerAction('shareImage')">⤴️ Bagikan</div>
         <div class="sub-menu-item" onclick="triggerAction('clearImage')">🗑️ Hapus Gambar</div>
     </div>
 
+    <div id="video-toolbar" class="video-toolbar" style="display: none;">
+        <button onclick="videoAction('rewind')" title="Mundur 5s">⏪ 5s</button>
+        <button data-rate="0.5" onclick="videoAction('slowmo')" title="Slow motion">0.5x</button>
+        <button data-rate="1" onclick="videoAction('normal')" title="Normal">1x</button>
+        <button data-rate="1.5" onclick="videoAction('fast')" title="Cepat 1.5x">1.5x</button>
+        <button data-rate="2" onclick="videoAction('faster')" title="Cepat 2x">2x</button>
+        <button onclick="videoAction('forward')" title="Maju 5s">⏩ 5s</button>
+        <button onclick="videoAction('fullscreen')" title="Layar penuh">⛶</button>
+    </div>
+
+    <!-- ═══ TOOLBAR ═══ -->
     <div class="bottom-toolbar">
         <button class="btn-action" onclick="triggerAction('triggerFile')">📂 Buka File</button>
         <button class="btn-action" id="btn-view-toggle" onclick="triggerAction('switchUiView')">🔲 Tampilan</button>
-        <button class="btn-action" id="btn-pixel-toggle" onclick="triggerAction('cycleRendering')">✨ Piksel: Halus</button>
+        <button class="btn-action" id="btn-pixel-toggle" onclick="triggerAction('cycleColorMode')">🎨 Normal</button>
         <button class="btn-action" onclick="triggerAction('resetTransform')">🔄 Reset</button>
         <button class="btn-action btn-more-trigger" onclick="triggerAction('toggleMoreMenu')">⋮</button>
     </div>
 
-    <input type="file" id="file-input" accept="image/*,video/*">
+    <input type="file" id="file-input" accept="*/*" multiple>
 
-    <div id="zoom-badge" style="
-        position: absolute; top: 65px; left: 15px; 
-        background: rgba(0, 0, 0, 0.6); color: #00e5ff; 
-        padding: 4px 10px; border-radius: 10px; 
-        font-size: 12px; font-weight: bold; font-family: monospace;
-        z-index: 22; border: 1px solid rgba(0, 229, 255, 0.3);
-        display: none; pointer-events: none;
-    ">Zoom: 1.0x</div>
-
-    <div id="coord-badge" style="
-        position: fixed;
-        background: rgba(0, 0, 0, 0.85);
-        color: #00e5ff;
-        padding: 5px 10px;
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: bold;
-        font-family: monospace;
-        z-index: 26;
-        border: 1px solid rgba(0, 229, 255, 0.4);
-        display: none;
-        pointer-events: none;
-        white-space: nowrap;
-        transform: translate(-50%, -140%);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.6);
-    "></div>
+    <!-- ═══ BADGE ═══ -->
+    <div id="zoom-badge">Zoom: 1.0x</div>
+    <div id="coord-badge"></div>
 
     <script src="db.js"></script>
-
     <script>
-        // Registrasi Service Worker
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('./sw.js', { scope: './' })
+    // ═══ SERVICE WORKER ═══
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js', { scope: './' })
             .then((reg) => console.log('SW aktif:', reg.scope))
-            .catch((err) => console.error('SW gagal:', err));
-        }
+            .catch((err) => console.error('SW gagal:', err && err.name, err && err.message, String(err)));
+    }
 
-        // INTEGRASI BLUEPRINT DATA JSON KE MEMORI UTAMA
-        const galleryConfig = {
-            "app_metadata": {
-                "application_name": "Galeri Zoom Extreme",
-                "version": "1.0.0",
-                "device_target": "Xiaomi 2GB RAM",
-                "stability_mode": "hardware_assisted"
-            },
-            "zoom_config": {
-                "min_scale": 1.0,
-                "max_scale": 100.0,
-                "zoom_sensitivity": 1.5,
-                "pan_speed": 1.0,
-                "lock_behavior": {
-                    "auto_center_on_reset": true,
-                    "clamp_to_edges": true,
-                    "background_color": "#000000"
-                },
-                "double_tap_reset": { "enabled": true, "reset_speed_ms": 100 },
-                "video_support": { "enabled": true, "allowed_formats": ["mp4", "webm"], "auto_play": true },
-                "ui_navigation_modes": {
-                    "default_view": "images_grid",
-                    "available_views": [
-                        { "id": "images_grid", "label": "🖼️ Riwayat", "filter": "all" },
-                        { "id": "folders_grid", "label": "📷 Foto", "filter": "image" },
-                        { "id": "file_manager_tree", "label": "🎬 Video", "filter": "video" }
-                    ]
-                }
-            },
-            "image_rendering_modes": [
-                { "id": "render_smooth", "label": "✨ Piksel: Halus", "css_property": "auto" },
-                { "id": "render_pixel", "label": "🔮 Piksel: Jujur", "css_property": "pixelated" }
-            ]
-        };
-
-        let zoomScale = 1;
-        let initialPanX = 0, initialPanY = 0;
-        let panX = 0, panY = 0;
-        let wasmReady = false;
-        let srcPtr = 0, srcW = 0, srcH = 0;
-        let canvasCtx = null;
-        let isDragging = false, startX = 0, startY = 0;
-        let initialTouchDist = 0, initialScale = 1;
-        let currentRenderIdx = 0, currentTabIdx = 0;
-        let lastTapTime = 0;
-
-        let currentActiveIdx = -1; 
-        let currentFileObject = null;
-        let currentMediaUrl = "";
-        let savedMediaList = [];
-
-        window.onload = () => {
-            initTouchSensors();
-            renderNavigationTabs();
-            loadSavedMedia();
-        };
-
-        // RENDER NAVIGASI ATAS SECARA DINAMIS BERDASARKAN JSON
-        function renderNavigationTabs() {
-            const navHeader = document.getElementById('nav-header');
-            const views = galleryConfig.zoom_config.ui_navigation_modes.available_views;
-            navHeader.innerHTML = "";
-
-            views.forEach((view, idx) => {
-                const tab = document.createElement('div');
-                tab.className = `nav-tab ${idx === 0 ? 'active' : ''}`;
-                tab.id = `tab-${view.id}`;
-                tab.innerText = view.label;
-                tab.onclick = () => changeTab(view.id, view.filter, idx);
-                navHeader.appendChild(tab);
-            });
-        }
-
-        // AMAN RAM 2GB: Proses input gambar dengan proteksi penyimpanan penuh
-        document.getElementById('file-input').addEventListener('change', async function(e) {
-            const files = e.target.files;
-            if (!files.length) return;
-        
-            for (const file of files) {
-                if (file.type.startsWith('video/')) {
-                    try {
-                        log?.('Memproses video...') || console.log('Memproses video...');
-                        await simpanVideo(file);
-                    } catch (err) {
-                        alert('Gagal simpan video: ' + err.message);
-                    }
-                } else {
-                    await simpanMedia(file);
-                }
+    // ═══ CONFIG ═══
+    const galleryConfig = {
+        app_metadata: { application_name: "Galeri Zoom Extreme", version: "1.0.0" },
+        zoom_config: {
+            min_scale: 1.0, max_scale: 100.0,
+            lock_behavior: { clamp_to_edges: true, background_color: "#000000" },
+            double_tap_reset: { enabled: true, reset_speed_ms: 100 },
+            ui_navigation_modes: {
+                available_views: [
+                    { id: "images_grid", label: "🖼️ Riwayat", filter: "all" },
+                    { id: "folders_grid", label: "📷 Foto", filter: "image" },
+                    { id: "file_manager_tree", label: "🎬 Video", filter: "video" }
+                ]
             }
-            await loadSavedMedia();
+        },
+        color_modes: [
+            { id: 'normal', label: '🎨 Normal',   filter: 'none' },
+            { id: 'vivid',  label: '🎨 Vivid',    filter: 'saturate(1.4) contrast(1.1)' },
+            { id: 'hd',     label: '🎨 HD Boost', filter: 'contrast(1.2) saturate(1.25) brightness(1.05)' },
+            { id: 'cine',   label: '🎬 Sinematik', filter: 'contrast(1.15) saturate(0.9) brightness(0.95)' },
+            { id: 'warm',   label: '🌅 Hangat',   filter: 'sepia(0.15) saturate(1.15) brightness(1.05)' },
+            { id: 'bw',     label: '⚫ B&W',      filter: 'grayscale(1) contrast(1.15)' }
+        ]
+    };
+
+    // ═══ STATE GLOBAL ═══
+    let zoomScale = 1, panX = 0, panY = 0;
+    let initialTouchDist = 0, initialScale = 1, initialPanX = 0, initialPanY = 0;
+    let isDragging = false, startX = 0, startY = 0;
+    let lastTapTime = 0;
+    let currentTabIdx = 0;
+
+    let currentActiveMedia = null;
+    let activeBlobUrls = [];
+
+    // WASM
+    let wasmReady = false;
+    let srcPtr = 0, srcW = 0, srcH = 0;
+    let canvasCtx = null;
+    let dstPtr = 0, dstW = 0, dstH = 0;
+    let canvasImageData = null;
+    let renderQueued = false;
+    let isInteracting = false;
+    let idleRenderTimer = null;
+    let touchRaf = 0;
+    let pendingTouch = null;
+    let lastBadgeTime = 0;
+    let lastRenderKey = '';
+
+    let videoOverlayVisible = false;
+    let videoOverlayTimer = null;
+    let videoEventsReady = false;
+    let currentColorIdx = 0;
+    let subtitleCues = [];
+    let subtitleUpdateTimer = null;
+    let savedVideoZoom = null;
+
+    let contextMenuMedia = null;
+    let contextMenuTimeout = null;
+    
+    // ═══ INIT ═══
+    window.addEventListener('load', async () => {
+        canvasCtx = document.getElementById('gallery-canvas').getContext('2d');
+        initTouchSensors();
+        renderNavigationTabs();
+        initColorMode();
+
+        // Tunggu WASM ready
+        let waited = 0;
+        const waitWasm = setInterval(() => {
+            if (typeof Module !== 'undefined' && typeof Module._render_bicubic === 'function') {
+                wasmReady = true;
+                clearInterval(waitWasm);
+                console.log('✅ WASM bicubic siap');
+            }
+            waited += 100;
+            if (waited > 10000) {
+                clearInterval(waitWasm);
+                console.warn('⚠️ WASM tidak ready setelah 10 detik');
+            }
+        }, 100);
+
+        await loadSavedMedia();
+
+        // Tangani ?shared=
+        const params = new URLSearchParams(location.search);
+        if (params.get('shared') === 'ok') setTimeout(() => alert('✅ Media dari share berhasil disimpan'), 300);
+        else if (params.get('shared') === 'error') setTimeout(() => alert('❌ Gagal menyimpan media share'), 300);
+
+        try {
+            const res = await cleanupVideo();
+            if (res.deleted > 0) console.log(`🧹 Cleanup: ${res.deleted} video lama dihapus`);
+        } catch (e) { console.warn('Cleanup error', e); }
+    });
+
+    // ═══ OBJECT URL MANAGEMENT ═══
+    function blobUrl(blob) {
+        const url = URL.createObjectURL(blob);
+        activeBlobUrls.push(url);
+        return url;
+    }
+    function revokeAllBlobUrls(keepLast = 0) {
+        while (activeBlobUrls.length > keepLast) {
+            URL.revokeObjectURL(activeBlobUrls.shift());
+        }
+    }
+
+    // ═══ NAV TABS ═══
+    function renderNavigationTabs() {
+        const navHeader = document.getElementById('nav-header');
+        const views = galleryConfig.zoom_config.ui_navigation_modes.available_views;
+        navHeader.innerHTML = '';
+        views.forEach((view, idx) => {
+            const tab = document.createElement('div');
+            tab.className = `nav-tab ${idx === 0 ? 'active' : ''}`;
+            tab.id = `tab-${view.id}`;
+            tab.innerText = view.label;
+            tab.onclick = () => changeTab(view.id, view.filter, idx);
+            navHeader.appendChild(tab);
         });
+    }
 
-        // BUKA GAMBAR & AKTIFKAN PEMBATAS INTERCEPT TOMBOL BACK HP
-        async function renderActiveMedia(media) {
-            // Kalau video, cek dulu apakah blob masih ada di DB
-            if (media.isVideo) {
-                const cek = await ambilMedia(media.id);
-                if (!cek || !cek.blob) {
-                    alert('⚠️ Video sudah dihapus (storage penuh).');
-                    // Hapus thumbnail yatim
-                    if (media.thumbBlob) await hapusMedia(media.id);
-                    await loadSavedMedia();
-                    return;
-                }
-                media = cek; // pakai data terbaru
+    // ═══ INPUT FILE ═══
+    document.getElementById('file-input').addEventListener('change', async function(e) {
+        const files = e.target.files;
+        if (!files.length) return;
+        console.log(`📥 Menerima ${files.length} file`);
+        
+        // ⭐ Pisahkan file subtitle dari media
+        const subtitleFiles = [];
+        const mediaFiles = [];
+        for (const f of files) {
+            const ext = (f.name.split('.').pop() || '').toLowerCase();
+            if (['srt', 'vtt', 'ass', 'ssa'].includes(ext)) subtitleFiles.push(f);
+            else mediaFiles.push(f);
+        }
+        
+        // ⭐ Kalau ada subtitle, simpan untuk dipakai nanti
+        if (subtitleFiles.length > 0) {
+            window._pendingSubtitle = subtitleFiles[0];
+            console.log(`📝 Subtitle terdeteksi: ${subtitleFiles[0].name}`);
+        }
+        
+        // ⭐ Kalau cuma subtitle tanpa media → tidak ada yang bisa disimpan
+        if (mediaFiles.length === 0) {
+            console.warn('Hanya file subtitle yang dipilih — tidak ada media untuk disimpan');
+            alert('File subtitle saja tidak bisa diproses. Pilih juga video/gambarnya.');
+            e.target.value = '';
+            return;
+        }
+        
+        for (const file of mediaFiles) {
+            console.log(`📄 File: ${file.name} | ${file.type} | ${(file.size/1024/1024).toFixed(2)} MB`);
+        
+            // ⭐ Klasifikasi file sebelum diproses
+            const cls = await classifyFile(file);
+            if (!cls.ok) {
+                console.log(`⏭️ Skip: ${file.name} — ${cls.reason}`);
+                continue;
             }
         
-            currentActiveMedia = media;
-            currentFileObject = {
-                name: media.name,
-                type: media.type,
-                size: media.blob.size
+            // Update tipe file kalau probe mendeteksi MIME baru
+            if (cls.mime && (!file.type || file.type === 'application/octet-stream')) {
+                try {
+                    const newFile = new File([file], file.name, { type: cls.mime });
+                    file = newFile;
+                    console.log(`🔄 File di-reclassify sebagai: ${cls.mime}`);
+                } catch (e) {
+                    console.warn('Gagal re-classify file:', e.message);
+                }
+            }
+
+            if (!file.type) {
+                console.error('❌ File tidak punya MIME type:', file.name);
+                alert(`File "${file.name}" tidak dikenal tipenya.`);
+                continue;
+            }
+
+            if (navigator.storage && navigator.storage.estimate) {
+                try {
+                    const est = await navigator.storage.estimate();
+                    const sisaMB = (est.quota - est.usage) / (1024*1024);
+                    const butuhMB = file.size / (1024*1024);
+                    console.log(`💾 Storage: dipakai ${(est.usage/1024/1024).toFixed(1)}MB / ${(est.quota/1024/1024).toFixed(0)}MB (sisa ${sisaMB.toFixed(1)}MB)`);
+                    if (butuhMB > sisaMB - 5) {
+                        console.error('❌ Storage tidak cukup');
+                        alert(`Storage hampir penuh!\nButuh: ${butuhMB.toFixed(1)} MB\nSisa: ${sisaMB.toFixed(1)} MB`);
+                        continue;
+                    }
+                } catch(e) { console.warn('Gagal cek storage:', e); }
+            }
+
+            try {
+                if (file.type.startsWith('video/')) {
+                    console.log('🎬 Memproses video...');
+                    const id = await simpanVideo(file);
+                    console.log('✅ Video tersimpan, id:', id);
+                } else {
+                    console.log('🖼️ Memproses gambar...');
+                    const id = await simpanMedia(file);
+                    console.log('✅ Gambar tersimpan, id:', id);
+                }
+            } catch (err) {
+                console.error('❌ GAGAL simpan:', {
+                    nama: file.name, tipe: file.type,
+                    ukuran: (file.size/1024/1024).toFixed(2) + ' MB',
+                    error_name: err.name,
+                    error_message: err.message,
+                    error_stack: err.stack
+                });
+                alert(`Gagal simpan "${file.name}":\n${err.name || 'Error'}: ${err.message || err}\n\nBuka console (📋) lalu Copy All.`);
+            }
+        }
+        e.target.value = '';
+        await loadSavedMedia();
+    });
+
+    // ═══ LOAD MEDIA DARI DB ═══
+    async function loadSavedMedia() {
+        revokeAllBlobUrls();
+        const gridContainer = document.getElementById('thumbnail-container');
+        const emptyPrompt = document.getElementById('empty-prompt');
+        gridContainer.innerHTML = '';
+
+        const list = await ambilMetadataSemuaMedia();
+        if (list.length === 0) { showEmptyState(); return; }
+
+        emptyPrompt.style.display = 'none';
+        gridContainer.style.display = 'grid';
+
+        for (const m of list) {
+            // Video thumbnail (jangan diubah)
+            if (m.isVideo && !m.thumbBlob && m.needsThumb) {
+                try {
+                    const full = await ambilMedia(m.id);
+                    if (full && full.blob) {
+                        const thumb = await generateVideoThumbnail(full.blob);
+                        await simpanThumbnail(m.id, thumb);
+                        m.thumbBlob = thumb;
+                        m.needsThumb = false;
+                    }
+                } catch (e) { console.warn('Thumb gagal', m.id, e); }
+            }
+            // ⭐ Gambar thumbnail (BARU)
+            else if (!m.isVideo && !m.thumbBlob && m.blob) {
+                try {
+                    const thumb = await generateImageThumbnail(m.blob);
+                    await simpanThumbnail(m.id, thumb);
+                    m.thumbBlob = thumb;
+                    console.log(`🖼️ Thumbnail gambar dibuat untuk id ${m.id}`);
+                } catch (e) {
+                    console.warn('Thumb gambar gagal', m.id, e.message);
+                }
+            }
+        }
+        renderGrid(list, gridContainer);
+    }
+
+    function renderGrid(list, gridContainer) {
+        gridContainer.innerHTML = '';
+        list.forEach((media) => {
+            const box = document.createElement('div');
+            box.className = 'grid-item';
+            let imgTag = '';
+    
+            if (media.isVideo) {
+                if (media.thumbBlob) {
+                    // Video dengan thumbnail
+                    const url = blobUrl(media.thumbBlob);
+                    imgTag = `<img src="${url}" loading="lazy" onerror="this.replaceWith(document.createTextNode('▶️'))">` +
+                             `<div class="video-badge">▶️ VIDEO</div>`;
+                } else {
+                    // Video tanpa thumbnail → gradient fallback
+                    const displayName = (media.name || 'video')
+                        .replace(/\.[^.]+$/, '')
+                        .slice(0, 30);
+                    const sizeMB = (media.size / (1024 * 1024)).toFixed(0);
+                    imgTag = `
+                        <div style="
+                            position:absolute;inset:0;
+                            background:linear-gradient(135deg, #1a237e 0%, #4a148c 50%, #311b92 100%);
+                            display:flex;flex-direction:column;
+                            align-items:center;justify-content:center;
+                            color:#fff;padding:6px;text-align:center;
+                            gap:3px;overflow:hidden;
+                        ">
+                            <div style="font-size:24px;line-height:1;">🎬</div>
+                            <div style="font-size:9px;font-weight:bold;line-height:1.1;max-height:2.2em;overflow:hidden;word-break:break-all;">
+                                ${displayName}
+                            </div>
+                            <div style="font-size:8px;color:rgba(255,255,255,0.7);">${sizeMB} MB</div>
+                        </div>
+                        <div class="video-badge">▶️ VIDEO</div>
+                    `;
+                }
+            } else {
+                if (media.thumbBlob) {
+                    const url = blobUrl(media.thumbBlob);
+                    imgTag = `<img src="${url}" loading="lazy">`;
+                } else if (media.blob) {
+                    // Gambar tanpa thumbnail → pakai blob asli
+                    const url = blobUrl(media.blob);
+                    imgTag = `<img src="${url}" loading="lazy">`;
+                } else {
+                    // Gambar tanpa blob (kasus langka) → placeholder
+                    imgTag = `<div style="
+                        position:absolute;inset:0;
+                        background:linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+                        display:flex;align-items:center;justify-content:center;
+                        color:#fff;font-size:24px;
+                    ">🖼️</div>`;
+                }
+            }
+    
+            box.innerHTML = imgTag;
+            attachGridItemHandlers(box, media);
+            gridContainer.appendChild(box);
+        });
+    }
+
+    function showEmptyState() {
+        const emptyPrompt = document.getElementById('empty-prompt');
+        const gridContainer = document.getElementById('thumbnail-container');
+        gridContainer.style.display = 'none';
+        emptyPrompt.innerHTML = 'Belum ada riwayat foto. Ketuk <b>"📂 Buka File"</b> di bawah untuk memuat media dari galeri HP asli.';
+        emptyPrompt.style.display = 'block';
+    }
+
+    async function changeTab(viewMode, filterType, indexIdx) {
+        currentTabIdx = indexIdx;
+        document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+        const targetTab = document.getElementById(`tab-${viewMode}`);
+        if (targetTab) targetTab.classList.add('active');
+
+        revokeAllBlobUrls();
+        const gridContainer = document.getElementById('thumbnail-container');
+        const emptyPrompt = document.getElementById('empty-prompt');
+        gridContainer.innerHTML = '';
+
+        const all = await ambilMetadataSemuaMedia();
+        let filtered;
+        if (filterType === 'image') filtered = all.filter(m => !m.isVideo);
+        else if (filterType === 'video') filtered = all.filter(m => m.isVideo);
+        else filtered = all;
+
+        if (filtered.length === 0) {
+            gridContainer.style.display = 'none';
+            if (filterType === 'video') {
+                emptyPrompt.innerHTML = `🎬 Belum ada video.<br><br>
+                    <button class="btn-action" style="max-width:220px;margin:10px auto;display:block"
+                            onclick="document.getElementById('file-input').click()">
+                        🎬 Buka Video
+                    </button>`;
+            } else if (filterType === 'image') {
+                emptyPrompt.innerHTML = `📷 Belum ada foto.`;
+            } else {
+                showEmptyState(); return;
+            }
+            emptyPrompt.style.display = 'block';
+            return;
+        }
+        emptyPrompt.style.display = 'none';
+        gridContainer.style.display = 'grid';
+        renderGrid(filtered, gridContainer);
+    }
+
+    // ═══ RENDER VIEWER ═══
+    async function renderActiveMedia(media) {
+        if (media.isVideo) {
+            const cek = await ambilMedia(media.id);
+            if (!cek || !cek.blob) {
+                alert('⚠️ Video sudah dihapus (storage penuh).');
+                await hapusMedia(media.id);
+                await loadSavedMedia();
+                return;
+            }
+            media = { ...media, ...cek };
+        }
+        currentActiveMedia = media;
+
+        const img = document.getElementById('gallery-image');
+        const video = document.getElementById('gallery-video');
+
+        document.getElementById('explorer-area').style.display = 'none';
+        document.getElementById('nav-header').style.display = 'none';
+
+        const url = blobUrl(media.blob);
+
+        if (media.type.startsWith('video/')) {
+            img.style.display = 'none'; img.src = '';
+            video.style.display = 'block';
+            video.style.transform = '';
+        
+            // Reset state video
+            video.muted = false;
+            video.volume = 1.0;
+            video.playbackRate = 1.0;
+            updatePlaybackButtons(1.0);
+        
+            document.querySelector('.bottom-toolbar').style.display = 'flex';
+            document.getElementById('zoom-badge').style.display = 'block';
+        
+            // ⭐ PROGRESS: probing
+            const updateProgress = (msg) => {
+                document.getElementById('zoom-badge').innerText = msg;
             };
         
-            const img = document.getElementById('gallery-image');
-            const video = document.getElementById('gallery-video');
+            updateProgress('🔍 Cek codec...');
         
-            document.getElementById('explorer-area').style.display = 'none';
-            document.getElementById('nav-header').style.display = 'none';
+            const probeResult = await probeVideo(media.blob);
         
-            const url = blobUrl(media.blob);
-        
-            if (media.type.startsWith('video/')) {
-                img.style.display = 'none'; img.src = '';
-                video.src = url;
-                video.style.display = 'block';
-                video.play().catch(() => {});
-            } else {
-                video.style.display = 'none'; video.pause(); video.src = '';
-                img.src = url;
-                img.style.display = 'block';
-            }
-        
-            document.getElementById('zoom-badge').style.display = 'block';
-            resetTransform();
-        
-            if (!history.state || !history.state.viewer) {
-                history.pushState({ viewer: true }, '');
-            }
-        }
-
-        // Cek parameter URL saat halaman dibuka
-        window.addEventListener('load', async () => {
-            // Auto-cleanup video tua (kalau ada)
-            try {
-                const res = await cleanupVideo();
-                if (res.deleted > 0) {
-                    console.log(`🧹 Cleanup: ${res.deleted} video lama dihapus`);
-                }
-            } catch (e) { console.warn('Cleanup error', e); }
-        
-            // ... (kode existing: cek ?shared=, dll)
-        });
-
-        // Handler tombol back HP
-        window.addEventListener('popstate', function(event) {
-            // Kalau viewer sedang terbuka → tutup viewer
-            if (document.getElementById('zoom-badge').style.display === 'block') {
-                document.getElementById('gallery-image').style.display = 'none';
-                document.getElementById('gallery-image').src = '';
-                document.getElementById('gallery-video').style.display = 'none';
-                document.getElementById('gallery-video').src = '';
+            if (!probeResult) {
+                updateProgress('');
                 document.getElementById('zoom-badge').style.display = 'none';
-                currentActiveMedia = null;
-                document.getElementById('explorer-area').style.display = 'block';
-                document.getElementById('nav-header').style.display = 'flex';
-                const activeView = galleryConfig.zoom_config.ui_navigation_modes.available_views[currentTabIdx];
-                changeTab(activeView.id, activeView.filter, currentTabIdx);
-            }
-            // Kalau viewer TIDAK terbuka → biarkan Android keluar app
-        });
-
-        function tutupLayarZoom() {
-            if (history.state && history.state.viewer) {
-                history.back();
-            } else {
-                _tutupLayarZoomInternal();
-            }
-        }
-        
-        function _tutupLayarZoomInternal() {
-            document.getElementById('gallery-image').style.display = 'none';
-            document.getElementById('gallery-image').src = '';
-            document.getElementById('gallery-video').style.display = 'none';
-            document.getElementById('gallery-video').src = '';
-            document.getElementById('zoom-badge').style.display = 'none';
-            currentActiveMedia = null;
-            document.getElementById('explorer-area').style.display = 'block';
-            document.getElementById('nav-header').style.display = 'flex';
-            const activeView = galleryConfig.zoom_config.ui_navigation_modes.available_views[currentTabIdx];
-            changeTab(activeView.id, activeView.filter, currentTabIdx);
-        }
-
-        // MENAMPILKAN MEDIA BERDASARKAN FILTER SELEKTIF JSON
-        async function loadSavedMedia() {
-            const gridContainer = document.getElementById('thumbnail-container');
-            const emptyPrompt = document.getElementById('empty-prompt');
-        
-            gridContainer.innerHTML = '';
-            gridContainer.style.display = 'grid';
-        
-            let list = await ambilSemuaMedia();
-            savedMediaList = list;
-        
-            if (list.length === 0) {
-                showEmptyState();
-                return;
-            }
-            emptyPrompt.style.display = 'none';
-        
-            // Proses video yang belum punya thumbnail
-            for (const m of list) {
-                if (m.isVideo && !m.thumbBlob && m.needsThumb) {
-                    try {
-                        const thumb = await generateVideoThumbnail(m.blob);
-                        await simpanThumbnail(m.id, thumb);
-                        m.thumbBlob = thumb;
-                        // Hapus flag needsThumb
-                        await new Promise((res) => {
-                            openDB().then(db => {
-                                const tx = db.transaction(STORE, 'readwrite');
-                                const store = tx.objectStore(STORE);
-                                const req = store.get(m.id);
-                                req.onsuccess = () => {
-                                    const item = req.result;
-                                    item.needsThumb = false;
-                                    store.put(item);
-                                    res();
-                                };
-                            });
-                        });
-                    } catch (e) {
-                        console.warn('Gagal thumbnail video', m.id, e);
-                    }
+                video.style.display = 'none';
+                if (media.thumbBlob) {
+                    img.src = blobUrl(media.thumbBlob);
+                    img.style.display = 'block';
                 }
-            }
-        
-            list.forEach((media) => {
-                const box = document.createElement('div');
-                box.className = 'grid-item';
-        
-                let url = '';
-                let imgTag = '';
-        
-                if (media.isVideo) {
-                    if (media.thumbBlob) {
-                        url = blobUrl(media.thumbBlob);
-                    }
-                    imgTag = `<img src="${url}" loading="lazy" onerror="this.style.display='none'">` +
-                             `<div class="video-badge">▶️ VIDEO</div>` +
-                             (!media.thumbBlob ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#666;font-size:24px">▶️</div>` : '');
-                } else {
-                    url = blobUrl(media.thumbBlob || media.blob);
-                    imgTag = `<img src="${url}" loading="lazy">`;
-                }
-        
-                box.innerHTML = imgTag;
-                box.onclick = () => renderActiveMedia(media);
-                gridContainer.appendChild(box);
-            });
-        }
-
-        function showEmptyState() {
-            const emptyPrompt = document.getElementById('empty-prompt');
-            emptyPrompt.innerHTML = 'Belum ada riwayat foto. Ketuk <b>"📂 Buka File"</b> di bawah untuk memuat media dari galeri HP asli.';
-            emptyPrompt.style.display = 'block';
-        }
-
-        // NAVIGASI ADAPTIF ATAS (RIWAYAT, FOLDER FOTO, MEMORI VIDEO)
-        async function changeTab(viewMode, filterType, indexIdx) {
-            currentTabIdx = indexIdx;
-            const tabs = document.querySelectorAll('.nav-tab');
-            tabs.forEach(tab => tab.classList.remove('active'));
-        
-            const targetTab = document.getElementById(`tab-${viewMode}`);
-            if (targetTab) targetTab.classList.add('active');
-        
-            const gridContainer = document.getElementById('thumbnail-container');
-            const emptyPrompt = document.getElementById('empty-prompt');
-            gridContainer.innerHTML = '';
-            gridContainer.style.display = 'grid';
-        
-            const all = await ambilSemuaMedia();
-        
-            let filtered;
-            if (filterType === 'all') filtered = all;
-            else if (filterType === 'image') filtered = all.filter(m => !m.isVideo);
-            else if (filterType === 'video') filtered = all.filter(m => m.isVideo);
-            else filtered = all;
-        
-            savedMediaList = filtered;
-        
-            if (filtered.length === 0) {
-                gridContainer.style.display = 'none';
-                if (filterType === 'video') {
-                    emptyPrompt.innerHTML = `
-                        🎬 Belum ada video di galeri.<br><br>
-                        <button class="btn-action" style="max-width:220px;margin:10px auto;display:block"
-                                onclick="document.getElementById('file-input').click()">
-                            🎬 Buka Video dari Galeri
-                        </button>
-                        <span style="font-size:10px;color:#666">
-                        Video disimpan di app (max 300 MB).<br>Yang lama otomatis terhapus.</span>
-                    `;
-                } else if (filterType === 'image') {
-                    emptyPrompt.innerHTML = `📷 Belum ada foto dalam riwayat.<br>Ketuk <b>"📂 Buka File"</b> atau <b>Share</b> dari galeri HP.`;
-                } else {
-                    showEmptyState();
-                }
-                emptyPrompt.style.display = 'block';
+                alert(
+                    `❌ Video tidak bisa diputar\n\n` +
+                    `File: ${media.name}\n` +
+                    `Browser tidak bisa baca codec video ini.\n\n` +
+                    `Kemungkinan HEVC / H.265 — HP ini tidak support.\n\n` +
+                    `Coba: convert ke MP4 (H.264) di aplikasi lain.`
+                );
                 return;
             }
         
-            emptyPrompt.style.display = 'none';
-        
-            // Render thumbnail (sama seperti loadSavedMedia, tapi pada list terfilter)
-            for (const m of filtered) {
-                if (m.isVideo && !m.thumbBlob && m.needsThumb) {
-                    try {
-                        const thumb = await generateVideoThumbnail(m.blob);
-                        await simpanThumbnail(m.id, thumb);
-                        m.thumbBlob = thumb;
-                    } catch (e) { console.warn(e); }
-                }
-            }
-        
-            filtered.forEach((media) => {
-                const box = document.createElement('div');
-                box.className = 'grid-item';
-                let imgTag = '';
-        
-                if (media.isVideo) {
-                    const url = media.thumbBlob ? blobUrl(media.thumbBlob) : '';
-                    imgTag = `<img src="${url}" loading="lazy" onerror="this.style.display='none'">` +
-                             `<div class="video-badge">▶️ VIDEO</div>` +
-                             (!media.thumbBlob ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#666;font-size:24px">▶️</div>` : '');
-                } else {
-                    const url = blobUrl(media.thumbBlob || media.blob);
-                    imgTag = `<img src="${url}" loading="lazy">`;
-                }
-        
-                box.innerHTML = imgTag;
-                box.onclick = () => renderActiveMedia(media);
-                gridContainer.appendChild(box);
-            });
-        }
+            // ⭐ FIX: Set video.src ke URL yang berhasil dari probe
+            video.src = probeResult.url;
+            video.load();   // paksa reload metadata
 
-        // AKURASI PINCH ZOOM & TRANSLASI SKALA BERDASARKAN PARAMETER CONFIG
-        function updateTransform() {
-            const img = document.getElementById('gallery-image');
-            const video = document.getElementById('gallery-video');
-            const targetElement = (img.style.display === 'block') ? img : video;
+            // ⭐ Atur loop: kalau ada next → jangan loop, biar bisa auto-play
+            try {
+                const videos = await getVideoList();
+                const idx = videos.findIndex(v => v.id === media.id);
+                const hasNext = idx >= 0 && idx < videos.length - 1;
+                video.loop = !hasNext;
+                console.log(`🎬 Loop: ${video.loop ? 'on (video terakhir)' : 'off (ada next)'}`);
+            } catch (e) {
+                video.loop = true;  // fallback
+            }
+
+            // Tunggu video siap sebelum play
+            await new Promise((resolve) => {
+                if (video.readyState >= 2) return resolve();  // sudah siap
+                const onReady = () => { video.removeEventListener('loadeddata', onReady); resolve(); };
+                video.addEventListener('loadeddata', onReady, { once: true });
+                // Timeout 8 detik
+                setTimeout(() => { video.removeEventListener('loadeddata', onReady); resolve(); }, 8000);
+            });
             
-            if (!targetElement || targetElement.style.display !== 'block') return;
-
-            const cfg = galleryConfig.zoom_config;
-            if (cfg.lock_behavior.clamp_to_edges && zoomScale > 1) {
-                const maxPanX = (window.innerWidth * (zoomScale - 1)) / 2;
-                const maxPanY = (window.innerHeight * (zoomScale - 1)) / 2;
-                panX = Math.max(-maxPanX, Math.min(panX, maxPanX));
-                panY = Math.max(-maxPanY, Math.min(panY, maxPanY));
+            updateProgress('▶️ Memuat...');
+            initVideoEvents();
+        
+            if (window._pendingSubtitle) {
+                const sub = window._pendingSubtitle;
+                window._pendingSubtitle = null;
+                loadSubtitleFile(sub);
+                document.getElementById('subtitle-display').style.display = 'block';
             }
-            targetElement.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
-            document.getElementById('zoom-badge').innerText = `Zoom: ${zoomScale.toFixed(1)}x`;
-            requestAnimationFrame(renderCanvasViewport);
-        }
-
-        function renderCanvasViewport() {
-            if (!wasmReady || !srcPtr) return;
         
-            const img = document.getElementById('gallery-image');
-            const canvas = document.getElementById('gallery-canvas');
+            showVideoOverlay(true);
         
-            // Zoom < 1.5 → pakai <img> (native, cepat)
-            if (zoomScale < 1.5) {
-                img.style.display = 'block';
-                canvas.style.display = 'none';
-                img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+            // Play
+            try {
+                await video.play();
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.warn('Play gagal, coba muted:', err.message);
+                    try { video.muted = true; await video.play(); } catch {}
+                }
+            }
+        
+            // ⭐ DETEKSI LAYAR HITAM: tunggu 800ms, cek apakah frame benar-benar muncul
+            updateProgress('🔍 Cek tampilan...');
+            const check = await detectBlackScreen(video);
+        
+            if (!check.ok) {
+                console.error('❌ Layar hitam terdeteksi:', check.reason);
+                updateProgress('');
+                document.getElementById('zoom-badge').style.display = 'none';
+                try { video.pause(); } catch {}
+                video.style.display = 'none';
+        
+                // Tampilkan thumbnail kalau ada
+                if (media.thumbBlob) {
+                    img.src = blobUrl(media.thumbBlob);
+                    img.style.display = 'block';
+                    img.style.filter = '';
+                }
+        
+                alert(
+                    `❌ Video tidak bisa ditampilkan\n\n` +
+                    `File: ${media.name}\n` +
+                    `Ukuran: ${(media.blob.size/1024/1024).toFixed(0)} MB\n` +
+                    `Durasi: ${(probeResult.duration/60).toFixed(0)} menit\n\n` +
+                    `Penyebab: ${check.reason}\n\n` +
+                    `Kemungkinan besar codec HEVC / H.265 tidak didukung HP ini.\n\n` +
+                    `Coba:\n` +
+                    `• Convert ke MP4 H.264 di aplikasi lain\n` +
+                    `• Play di VLC / MX Player\n` +
+                    `• Download versi H.264 dari sumber`
+                );
                 return;
             }
         
-            // Zoom >= 1.5 → pakai canvas + WASM bicubic
-            img.style.display = 'none';
-            canvas.style.display = 'block';
+            // ✅ Video OK
+            updateProgress('Zoom: 1.0x');
+            // ⭐ Auto-play next setelah selesai (cuma sekali pasang)
+            if (!video._hasEndedListener) {
+                video._hasEndedListener = true;
+                video.addEventListener('ended', () => {
+                    console.log('🏁 Video selesai');
+                    autoPlayNextIfAny();
+                });
+            }
+            srcPtr = 0;
+        } else {
+            try { if (!video.paused) video.pause(); } catch (e) {}
+            video.style.display = 'none';
+            video.removeAttribute('src');
+            try { video.load(); } catch (e) {}
+            img.src = url;
+            img.style.display = 'block';
+            img.onload = () => loadImageToWasm(img);
         
-            const cw = window.innerWidth;
-            const ch = window.innerHeight;
+            // ⭐ Restore toolbar app, sembunyikan overlay video
+            document.querySelector('.bottom-toolbar').style.display = 'flex';
+            hideVideoOverlay();
+            document.getElementById('subtitle-display').style.display = 'none';
+            stopSubtitleSync();
+        }
+
+        document.getElementById('zoom-badge').style.display = 'block';
+        resetTransform();
+        
+        // ⭐ Restore zoom video (kalau pindah dari video lain)
+        if (savedVideoZoom && media.isVideo) {
+            zoomScale = savedVideoZoom.scale;
+            panX = savedVideoZoom.panX;
+            panY = savedVideoZoom.panY;
+            updateTransform();
+            updateZoomBadge(`Zoom: ${zoomScale.toFixed(1)}x`, true);
+            console.log(`🔍 Restore zoom: ${zoomScale.toFixed(1)}x`);
+        }
+        
+        if (!history.state || !history.state.viewer) {
+            history.pushState({ viewer: true }, '');
+        }
+    }
+
+    // ═══ LOAD IMAGE KE WASM ═══
+    function loadImageToWasm(imgElement) {
+        if (!wasmReady) { console.warn('WASM belum ready'); return; }
+        try {
+            if (srcPtr) { Module._free(srcPtr); srcPtr = 0; }
+            const w = imgElement.naturalWidth;
+            const h = imgElement.naturalHeight;
+            if (!w || !h) return;
+
+            const tmp = document.createElement('canvas');
+            tmp.width = w; tmp.height = h;
+            const ctx = tmp.getContext('2d');
+            ctx.drawImage(imgElement, 0, 0);
+            const imageData = ctx.getImageData(0, 0, w, h);
+
+            const bytes = w * h * 4;
+            srcPtr = Module._malloc(bytes);
+            Module.HEAPU8.set(imageData.data, srcPtr);
+            srcW = w; srcH = h;
+
+            console.log(`✅ Gambar dimuat ke WASM: ${w}x${h}, ptr=${srcPtr}`);
+        } catch (e) {
+            console.error('Gagal load image ke WASM:', e);
+            srcPtr = 0;
+        }
+    }
+
+    // ═══ TRANSFORM ═══
+    function scheduleRender() {
+        if (renderQueued) return;
+        renderQueued = true;
+        requestAnimationFrame(() => {
+            renderQueued = false;
+            renderCanvasViewport();
+        });
+    }
+
+    function markInteracting() {
+        isInteracting = true;
+        if (idleRenderTimer) clearTimeout(idleRenderTimer);
+        idleRenderTimer = setTimeout(() => {
+            isInteracting = false;
+            scheduleRender();
+        }, 150);
+    }
+
+    function updateTransform() {
+        const img = document.getElementById('gallery-image');
+        const video = document.getElementById('gallery-video');
+        const isVideo = isVideoActive();
+        const target = isVideo ? video : ((img.style.display === 'block') ? img : video);
+        if (!target) return;
+        if (!isVideo && target.style.display !== 'block') return;
+    
+        applyClampToTarget(target);
+    
+        target.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+        updateZoomBadge(`Zoom: ${zoomScale.toFixed(1)}x${isInteracting ? ' ⚡' : ''}`);
+    
+        // WASM hanya untuk gambar
+        if (!isVideo && target === img && zoomScale >= 1.5 && wasmReady && srcPtr) {
+            scheduleRender();
+        }
+    }
+
+    function renderCanvasViewport() {
+        if (!wasmReady || !srcPtr || !srcW || !srcH) return;
+    
+        const img = document.getElementById('gallery-image');
+        const canvas = document.getElementById('gallery-canvas');
+
+        // Mode default: <img> untuk zoom rendah, canvas untuk zoom tinggi
+        if (zoomScale < 1.5) {
+            img.style.display = 'block';
+            img.style.imageRendering = 'auto';
+            canvas.style.display = 'none';
+            img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+            return;
+        }
+
+        // HYBRID: saat interaksi → img GPU
+        if (isInteracting) {
+            img.style.display = 'block';
+            canvas.style.display = 'none';
+            img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+            img.style.imageRendering = 'auto';
+            document.getElementById('zoom-badge').innerText = `Zoom: ${zoomScale.toFixed(1)}x ⚡`;
+            return;
+        }
+
+        // IDLE: canvas WASM
+        img.style.display = 'none';
+        canvas.style.display = 'block';
+
+        const RENDER_SCALE = 1.0;   // ⭐ sesuaikan: 1.0 = lebih cepat, 0.75 = lebih tajam
+        const cw = Math.floor(Math.min(1080, window.innerWidth) * RENDER_SCALE);
+        const ch = Math.floor(Math.min(2400, window.innerHeight) * RENDER_SCALE);
+        if (canvas.width !== cw || canvas.height !== ch) {
             canvas.width = cw;
             canvas.height = ch;
-        
-            // Hitung viewport
-            const displayScale = Math.min(cw / srcW, ch / srcH);
-            const totalZoom = displayScale * zoomScale;
-        
-            const centerSrcX = srcW / 2 - (panX / totalZoom);
-            const centerSrcY = srcH / 2 - (panY / totalZoom);
-        
-            const offsetX = centerSrcX - (cw / 2) / totalZoom;
-            const offsetY = centerSrcY - (ch / 2) / totalZoom;
-        
-            // Buffer output
-            const dstSize = cw * ch * 4;
-            const dstPtr = Module._malloc(dstSize);
-        
-            const t0 = performance.now();
-            Module._render_bicubic(
-                srcPtr, srcW, srcH,
-                dstPtr, cw, ch,
-                offsetX, offsetY, totalZoom
-            );
-            const t1 = performance.now();
-        
-            // Copy ke canvas
-            const out = new Uint8ClampedArray(Module.HEAPU8.buffer, dstPtr, dstSize);
-            canvasCtx.putImageData(new ImageData(out, cw, ch), 0, 0);
-        
-            Module._free(dstPtr);
-        
-            // Update badge
-            document.getElementById('zoom-badge').innerText =
-                `Zoom: ${zoomScale.toFixed(1)}x | ${(t1 - t0).toFixed(0)}ms`;
+        }
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+
+        const displayScale = Math.min(cw / srcW, ch / srcH);
+        const totalZoom = displayScale * zoomScale;
+
+        const centerSrcX = srcW / 2 - (panX / totalZoom);
+        const centerSrcY = srcH / 2 - (panY / totalZoom);
+        const offsetX = centerSrcX - (cw / 2) / totalZoom;
+        const offsetY = centerSrcY - (ch / 2) / totalZoom;
+
+        const bytes = cw * ch * 4;
+        if (dstPtr === 0 || bytes !== dstW * dstH * 4) {
+            if (dstPtr) Module._free(dstPtr);
+            dstPtr = Module._malloc(bytes);
+            dstW = cw; dstH = ch;
+            canvasImageData = canvasCtx.createImageData(cw, ch);
         }
 
-        function resetTransform() {
-            zoomScale = galleryConfig.zoom_config.min_scale; panX = 0; panY = 0;
-            updateTransform();
-        }
+        const t0 = performance.now();
+        Module._render_bicubic(srcPtr, srcW, srcH, dstPtr, cw, ch, offsetX, offsetY, totalZoom);
+        const t1 = performance.now();
 
-        // Konversi koordinat layar → koordinat piksel gambar asli
-        function screenToImage(sx, sy) {
-            const img = document.getElementById('gallery-image');
-            const video = document.getElementById('gallery-video');
-            const el = (img.style.display === 'block') ? img : video;
-            if (!el || el.style.display !== 'block') return null;
-        
-            const nw = el.naturalWidth || el.videoWidth;
-            const nh = el.naturalHeight || el.videoHeight;
-            if (!nw || !nh) return null;
-        
-            const cw = window.innerWidth, ch = window.innerHeight;
-            const displayScale = Math.min(cw / nw, ch / nh);
-        
-            const lx = (sx - cw / 2 - panX) / zoomScale;
-            const ly = (sy - ch / 2 - panY) / zoomScale;
-            const px = Math.round(lx / displayScale + nw / 2);
-            const py = Math.round(ly / displayScale + nh / 2);
-        
-            return { px, py, nw, nh };
+        const view = new Uint8ClampedArray(Module.HEAPU8.buffer, dstPtr, bytes);
+        canvasImageData.data.set(view);
+        canvasCtx.putImageData(canvasImageData, 0, 0);
+        // ⭐ Skip kalau parameter render sama
+        const key = `${offsetX.toFixed(3)}_${offsetY.toFixed(3)}_${totalZoom.toFixed(3)}_${cw}_${ch}`;
+        if (key === lastRenderKey) return;
+        lastRenderKey = key;
+
+        document.getElementById('zoom-badge').innerText =
+            `Zoom: ${zoomScale.toFixed(1)}x | ${(t1 - t0).toFixed(0)}ms`;
+    }
+
+    // ⭐ FIX: jangan sentuh display img/video — biarkan sesuai media yang aktif
+    function resetTransform() {
+        zoomScale = galleryConfig.zoom_config.min_scale;
+        panX = 0; panY = 0;
+        document.getElementById('gallery-canvas').style.display = 'none';
+    
+        const img = document.getElementById('gallery-image');
+        const video = document.getElementById('gallery-video');
+    
+        if (isVideoActive()) {
+            video.style.transform = '';
+            img.style.display = 'none';
+            video.style.display = 'block';
+        } else {
+            img.style.transform = '';
+            video.style.display = 'none';
+            img.style.display = 'block';
         }
-        
-        function showCoordBadge(sx, sy) {
-            const info = screenToImage(sx, sy);
-            const badge = document.getElementById('coord-badge');
-            if (!info) { badge.style.display = 'none'; return; }
-            badge.style.display = 'block';
-            badge.style.left = sx + 'px';
-            badge.style.top = sy + 'px';
-            badge.textContent = `X:${info.px} Y:${info.py}`;
+    
+        isInteracting = false;
+        if (idleRenderTimer) clearTimeout(idleRenderTimer);
+        lastRenderKey = '';
+        updateTransform();
+        updateZoomBadge(`Zoom: 1.0x`, true);
+    }
+
+    // ═══ KOORDINAT BADGE ═══
+    function screenToImage(sx, sy) {
+        const img = document.getElementById('gallery-image');
+        const video = document.getElementById('gallery-video');
+        const el = (img.style.display === 'block') ? img : video;
+        if (!el || el.style.display !== 'block') return null;
+        const nw = el.naturalWidth || el.videoWidth;
+        const nh = el.naturalHeight || el.videoHeight;
+        if (!nw || !nh) return null;
+        const cw = window.innerWidth, ch = window.innerHeight;
+        const displayScale = Math.min(cw / nw, ch / nh);
+        const lx = (sx - cw / 2 - panX) / zoomScale;
+        const ly = (sy - ch / 2 - panY) / zoomScale;
+        const px = Math.round(lx / displayScale + nw / 2);
+        const py = Math.round(ly / displayScale + nh / 2);
+        return { px, py, nw, nh };
+    }
+    function showCoordBadge(sx, sy) {
+        const info = screenToImage(sx, sy);
+        const badge = document.getElementById('coord-badge');
+        if (!info || info.px < 0 || info.py < 0 || info.px >= info.nw || info.py >= info.nh) {
+            badge.style.display = 'none'; return;
         }
-        
-        function hideCoordBadge() {
-            document.getElementById('coord-badge').style.display = 'none';
+        badge.style.display = 'block';
+        badge.style.left = sx + 'px';
+        badge.style.top = sy + 'px';
+        badge.textContent = `X:${info.px} Y:${info.py}`;
+    }
+    function hideCoordBadge() {
+        document.getElementById('coord-badge').style.display = 'none';
+    }
+
+    // ═══ DOUBLE TAP ═══
+    function handleDoubleTap(tx, ty) {
+        const cfg = galleryConfig.zoom_config;
+        const cw = window.innerWidth, ch = window.innerHeight;
+    
+        if (zoomScale > 1.5) {
+            zoomScale = cfg.min_scale;
+            panX = 0; panY = 0;
+        } else {
+            const newZoom = 5.0;
+            const lx = tx - cw / 2 - panX;
+            const ly = ty - ch / 2 - panY;
+            panX = -lx * (newZoom / zoomScale);
+            panY = -ly * (newZoom / zoomScale);
+            zoomScale = newZoom;
         }
-        
-        // Double tap: zoom ke titik yang ditap, atau reset kalau sudah zoom
-        function handleDoubleTap(tx, ty) {
-            const cfg = galleryConfig.zoom_config;
-            const cw = window.innerWidth, ch = window.innerHeight;
-        
-            if (zoomScale > 1.5) {
-                // Sudah zoom → reset
-                zoomScale = cfg.min_scale;
-                panX = 0; panY = 0;
-            } else {
-                // Zoom ke titik yang ditap
-                const newZoom = 5.0;
-                const lx = tx - cw / 2 - panX;
-                const ly = ty - ch / 2 - panY;
-                panX = -lx * (newZoom / zoomScale);
-                panY = -ly * (newZoom / zoomScale);
-                zoomScale = newZoom;
+    
+        // ⭐ Batalkan interaksi supaya WASM langsung render
+        isInteracting = false;
+        if (idleRenderTimer) clearTimeout(idleRenderTimer);
+        lastRenderKey = '';   // paksa render ulang
+    
+        updateTransform();
+        updateZoomBadge(`Zoom: ${zoomScale.toFixed(1)}x`, true);
+    }
+
+    // ═══ RENDER CYCLE ═══
+    function cycleColorMode() {
+        currentColorIdx = (currentColorIdx + 1) % galleryConfig.color_modes.length;
+        applyColorMode(galleryConfig.color_modes[currentColorIdx]);
+        try { localStorage.setItem('colorModeIdx', String(currentColorIdx)); } catch {}
+    }
+    
+    function applyColorMode(mode) {
+        const cssFilter = mode.filter === 'none' ? '' : mode.filter;
+        // ⭐ Terapkan ke 3 elemen (img, video, canvas)
+        ['gallery-image', 'gallery-video', 'gallery-canvas'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.filter = cssFilter;
+        });
+        const btn = document.getElementById('btn-pixel-toggle');
+        if (btn) btn.innerText = mode.label;
+        console.log(`🎨 Mode warna: ${mode.label}`);
+    }
+    
+    function initColorMode() {
+        try {
+            const saved = parseInt(localStorage.getItem('colorModeIdx') || '0', 10);
+            if (saved >= 0 && saved < galleryConfig.color_modes.length) {
+                currentColorIdx = saved;
             }
-            updateTransform();
-        }
+        } catch {}
+        applyColorMode(galleryConfig.color_modes[currentColorIdx]);
+    }
 
-        function cycleRendering() {
-            currentRenderIdx = (currentRenderIdx + 1) % galleryConfig.image_rendering_modes.length;
-            const modeAktif = galleryConfig.image_rendering_modes[currentRenderIdx];
-            
-            document.getElementById('gallery-image').style.imageRendering = modeAktif.css_property;
-            document.getElementById('btn-pixel-toggle').innerText = modeAktif.label;
-        }
+    // ═══ TOUCH ═══
+    function getDistance(e) {
+        return Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                          e.touches[0].clientY - e.touches[1].clientY);
+    }
 
-        function getDistance(e) {
-            return Math.sqrt(Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) + Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2));
-        }
+    function updateZoomBadge(text, force = false) {
+        const now = performance.now();
+        if (!force && now - lastBadgeTime < 100) return;
+        lastBadgeTime = now;
+        document.getElementById('zoom-badge').innerText = text;
+    }
 
-        function initTouchSensors() {
-            const coreContainer = document.getElementById('viewer-core');
-        
-            coreContainer.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) {
-                    const tx = e.touches[0].clientX;
-                    const ty = e.touches[0].clientY;
-                    const now = Date.now();
-        
-                    // Tampilkan coord badge
-                    showCoordBadge(tx, ty);
-        
-                    // Deteksi double tap
-                    if (now - lastTapTime < 300 && now - lastTapTime > 0) {
-                        handleDoubleTap(tx, ty);
-                        e.preventDefault();
-                        lastTapTime = 0;
-                        return;
-                    }
-                    lastTapTime = now;
-        
-                    isDragging = true;
-                    startX = tx - panX;
-                    startY = ty - panY;
-        
-                } else if (e.touches.length === 2) {
-                    isDragging = false;
-                    hideCoordBadge();
-                    initialTouchDist = getDistance(e);
-                    initialScale = zoomScale;
-                    initialPanX = panX;
-                    initialPanY = panY;
-                }
-            });
-        
-            coreContainer.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                const cfg = galleryConfig.zoom_config;
-        
-                if (e.touches.length === 1) {
-                    const tx = e.touches[0].clientX;
-                    const ty = e.touches[0].clientY;
-        
-                    showCoordBadge(tx, ty);
-        
-                    if (isDragging) {
-                        panX = tx - startX;
-                        panY = ty - startY;
-                        updateTransform();
-                    }
-        
-                } else if (e.touches.length === 2) {
-                    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                    const dist = getDistance(e);
-                    const ratio = dist / initialTouchDist;
-        
-                    // Sensitivitas non-linear: makin zoom, makin halus
-                    const dampening = 1 / (1 + Math.log10(Math.max(1, initialScale)) * 0.6);
-                    const newZoom = Math.max(
-                        cfg.min_scale,
-                        Math.min(initialScale * Math.pow(ratio, dampening), cfg.max_scale)
-                    );
-        
-                    const cw = window.innerWidth, ch = window.innerHeight;
-                    const lx = (mx - cw / 2 - initialPanX) / initialScale;
-                    const ly = (my - ch / 2 - initialPanY) / initialScale;
-        
-                    panX = mx - cw / 2 - lx * newZoom;
-                    panY = my - ch / 2 - ly * newZoom;
-                    zoomScale = newZoom;
-        
-                    if (zoomScale <= 1.05) { zoomScale = 1; panX = 0; panY = 0; }
-                    updateTransform();
-                }
-            });
-        
-            coreContainer.addEventListener('touchend', (e) => {
-                isDragging = false;
-                if (zoomScale === 1) { panX = 0; panY = 0; }
-        
-                // Sembunyikan coord badge jika tidak ada jari tersisa
-                if (e.touches.length === 0) hideCoordBadge();
-        
-                updateTransform();
-            });
-        
-            coreContainer.addEventListener('touchcancel', () => {
+    function initTouchSensors() {
+        const core = document.getElementById('viewer-core');
+    
+        // ═══ STATE UNTUK TAP vs DRAG ═══
+        let tapStartX = 0, tapStartY = 0, tapStartTime = 0, tapMoved = false;
+    
+        core.addEventListener('touchstart', (e) => {
+            // ═══ TAP TRACKING (untuk video & foto) ═══
+            if (e.touches.length === 1) {
+                tapStartX = e.touches[0].clientX;
+                tapStartY = e.touches[0].clientY;
+                tapStartTime = Date.now();
+                tapMoved = false;
+            }
+    
+            // ═══ 2 JARI → PINCH ZOOM (video & foto) ═══
+            if (e.touches.length === 2) {
                 isDragging = false;
                 hideCoordBadge();
-            });
+                initialTouchDist = getDistance(e);
+                initialScale = zoomScale;
+                initialPanX = panX;
+                initialPanY = panY;
+                markInteracting();
+                return;
+            }
+    
+            // ═══ 1 JARI ═══
+            if (e.touches.length === 1) {
+                const tx = e.touches[0].clientX;
+                const ty = e.touches[0].clientY;
+    
+                // Double-tap detection (video & foto)
+                const now = Date.now();
+                if (now - lastTapTime < 300 && now - lastTapTime > 0) {
+                    handleDoubleTap(tx, ty);
+                    e.preventDefault();
+                    lastTapTime = 0;
+                    isDragging = false;
+                    tapMoved = true; // cegah toggle overlay setelah double-tap
+                    return;
+                }
+                lastTapTime = now;
+    
+                // VIDEO: drag = pan kalau zoom > 1
+                if (isVideoActive()) {
+                    if (zoomScale > 1) {
+                        isDragging = true;
+                        startX = tx - panX;
+                        startY = ty - panY;
+                    }
+                    return;
+                }
+    
+                // FOTO: perilaku seperti biasa
+                showCoordBadge(tx, ty);
+                isDragging = true;
+                startX = tx - panX;
+                startY = ty - panY;
+            }
+        }, { passive: false });
+    
+        core.addEventListener('touchmove', (e) => {
+            // ═══ CEK APAKAH TAP MASIH TAP ═══
+            if (e.touches.length === 1 && !tapMoved) {
+                const dx = e.touches[0].clientX - tapStartX;
+                const dy = e.touches[0].clientY - tapStartY;
+                if (dx * dx + dy * dy > 400) tapMoved = true; // >20px dianggap drag
+            }
+    
+            // ═══ 2 JARI → PINCH (video & foto) ═══
+            if (e.touches.length === 2) {
+                if (e.cancelable) e.preventDefault();
+                const t = e.touches;
+                pendingTouch = {
+                    n: 2,
+                    x0: t[0].clientX, y0: t[0].clientY,
+                    x1: t[1].clientX, y1: t[1].clientY
+                };
+                if (touchRaf) return;
+                touchRaf = requestAnimationFrame(processPendingTouch);
+                return;
+            }
+    
+            // ═══ 1 JARI ═══
+            if (e.touches.length === 1) {
+                if (isVideoActive()) {
+                    // Video: pan kalau dragging
+                    if (isDragging && zoomScale > 1) {
+                        if (e.cancelable) e.preventDefault();
+                        const t = e.touches[0];
+                        pendingTouch = { n: 1, x0: t.clientX, y0: t.clientY, x1: 0, y1: 0 };
+                        if (touchRaf) return;
+                        touchRaf = requestAnimationFrame(processPendingTouch);
+                    }
+                    return;
+                }
+    
+                // Foto: perilaku biasa
+                if (e.cancelable) e.preventDefault();
+                const t = e.touches;
+                pendingTouch = {
+                    n: 1,
+                    x0: t[0].clientX, y0: t[0].clientY,
+                    x1: 0, y1: 0
+                };
+                if (touchRaf) return;
+                touchRaf = requestAnimationFrame(processPendingTouch);
+            }
+        }, { passive: false });
+    
+        core.addEventListener('touchend', (e) => {
+            // ═══ TAP → TOGGLE OVERLAY (khusus video) ═══
+            if (isVideoActive() && e.touches.length === 0) {
+                const dur = Date.now() - tapStartTime;
+                if (dur < 300 && !tapMoved) {
+                    // Tap valid → toggle overlay
+                    toggleVideoOverlay();
+                    return;
+                }
+            }
+    
+            // Reset state
+            if (e.touches.length === 0) {
+                isDragging = false;
+                if (zoomScale === 1) { panX = 0; panY = 0; }
+                hideCoordBadge();
+                isInteracting = false;
+                if (idleRenderTimer) clearTimeout(idleRenderTimer);
+                updateTransform();
+                updateZoomBadge(`Zoom: ${zoomScale.toFixed(1)}x`, true);
+            }
+        });
+    
+        core.addEventListener('touchcancel', () => {
+            isDragging = false;
+            hideCoordBadge();
+            isInteracting = false;
+            updateTransform();
+        });
+    
+        // ═══ processPendingTouch — handle pinch & pan ═══
+        function processPendingTouch() {
+            touchRaf = 0;
+            if (!pendingTouch) return;
+            const p = pendingTouch;
+            pendingTouch = null;
+            const cfg = galleryConfig.zoom_config;
+    
+            if (p.n === 1) {
+                // PAN
+                markInteracting();
+                const isVideo = isVideoActive();
+                if (!isVideo) showCoordBadge(p.x0, p.y0);
+    
+                const target = isVideo
+                    ? document.getElementById('gallery-video')
+                    : ((document.getElementById('gallery-image').style.display === 'block')
+                        ? document.getElementById('gallery-image')
+                        : document.getElementById('gallery-video'));
+    
+                if (target && (isVideo || target.style.display === 'block')) {
+                    panX = p.x0 - startX;
+                    panY = p.y0 - startY;
+                    applyClampToTarget(target);
+                    target.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+                }
+                updateZoomBadge(`Zoom: ${zoomScale.toFixed(1)}x${isInteracting ? ' ⚡' : ''}`);
+    
+                if (!isVideo && isInteracting) {
+                    document.getElementById('gallery-image').style.display = 'block';
+                    document.getElementById('gallery-canvas').style.display = 'none';
+                }
+            } else if (p.n === 2) {
+                // PINCH ZOOM
+                markInteracting();
+                const mx = (p.x0 + p.x1) / 2;
+                const my = (p.y0 + p.y1) / 2;
+                const dist = Math.hypot(p.x0 - p.x1, p.y0 - p.y1);
+                const ratio = dist / initialTouchDist;
+                const dampening = 1 / (1 + Math.log10(Math.max(1, initialScale)) * 0.6);
+                const maxZoom = isVideoActive() ? 10 : cfg.max_scale;
+                const newZoom = Math.max(cfg.min_scale,
+                    Math.min(initialScale * Math.pow(ratio, dampening), maxZoom));
+    
+                const cw = window.innerWidth, ch = window.innerHeight;
+                const lx = (mx - cw / 2 - initialPanX) / initialScale;
+                const ly = (my - ch / 2 - initialPanY) / initialScale;
+    
+                panX = mx - cw / 2 - lx * newZoom;
+                panY = my - ch / 2 - ly * newZoom;
+                zoomScale = newZoom;
+                if (zoomScale <= 1.05) { zoomScale = 1; panX = 0; panY = 0; }
+    
+                if (isVideoActive()) {
+                    const video = document.getElementById('gallery-video');
+                    applyClampToTarget(video);
+                    video.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+                } else {
+                    const img = document.getElementById('gallery-image');
+                    img.style.display = 'block';
+                    applyClampToTarget(img);
+                    img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+                    document.getElementById('gallery-canvas').style.display = 'none';
+                }
+                updateZoomBadge(`Zoom: ${zoomScale.toFixed(1)}x ⚡`);
+            }
         }
+    }
+    
+    // ═══ Helper: clamp pan berdasarkan ukuran aktual media ═══
+    function applyClampToTarget(target) {
+        if (!target || zoomScale <= 1) return;
+        const nw = target.naturalWidth || target.videoWidth || 0;
+        const nh = target.naturalHeight || target.videoHeight || 0;
+        if (!nw || !nh) return;
+        const cw = window.innerWidth, ch = window.innerHeight;
+        const displayScale = Math.min(cw / nw, ch / nh);
+        const fitW = nw * displayScale;
+        const fitH = nh * displayScale;
+        const maxPanX = Math.max(0, (fitW * zoomScale - cw) / 2);
+        const maxPanY = Math.max(0, (fitH * zoomScale - ch) / 2);
+        panX = Math.max(-maxPanX, Math.min(panX, maxPanX));
+        panY = Math.max(-maxPanY, Math.min(panY, maxPanY));
+    }
 
-        // PENGENDALI AKSI MODUL UTAMA & POPUP
-        async function triggerAction(actionName) {
-            const menu = document.getElementById('more-menu-popup');
-            if (actionName !== 'toggleMoreMenu') menu.style.display = 'none';
+    function generateVideoThumbnail(videoFile) {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            video.preload = 'auto';        // ⭐ auto, bukan metadata (butuh frame juga)
+            video.muted = true;
+            video.playsInline = true;
+            video.crossOrigin = 'anonymous';
+            const url = URL.createObjectURL(videoFile);
+            video.src = url;
+    
+            let done = false;
+            const cleanup = () => { try { URL.revokeObjectURL(url); } catch {} };
+            
+            const timer = setTimeout(() => {
+                if (done) return;
+                done = true;
+                cleanup();
+                reject(new Error('Thumbnail timeout'));
+            }, 10000);   // naikkan jadi 10s
+    
+            const drawFrame = () => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                try {
+                    const canvas = document.createElement('canvas');
+                    const vw = video.videoWidth || 1;
+                    const vh = video.videoHeight || 1;
+                    const scale = Math.min(1, 400 / Math.max(vw, vh));
+                    canvas.width = Math.max(1, Math.floor(vw * scale));
+                    canvas.height = Math.max(1, Math.floor(vh * scale));
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // ⭐ Cek apakah hasilnya hitam pekat (semua pixel < 20)
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    let totalBrightness = 0;
+                    for (let i = 0; i < imgData.data.length; i += 4) {
+                        totalBrightness += (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+                    }
+                    const avgBrightness = totalBrightness / (imgData.data.length / 4);
+                    
+                    canvas.toBlob((blob) => {
+                        cleanup();
+                        if (!blob) return reject(new Error('Gagal buat thumbnail (blob null)'));
+                        // Kalau terlalu gelap, coba seek 50% dan ambil lagi (sekali saja)
+                        if (avgBrightness < 10 && video.duration > 1 && !video._retried) {
+                            video._retried = true;
+                            done = false;
+                            video.currentTime = video.duration * 0.5;
+                            return;   // akan re-trigger onseeked
+                        }
+                        resolve(blob);
+                    }, 'image/jpeg', 0.85);
+                } catch (e) {
+                    cleanup();
+                    reject(e);
+                }
+            };
+    
+            video.onloadeddata = () => {
+                // Ambil di 25% durasi (biasanya sudah ada konten, bukan hitam)
+                const dur = video.duration || 0;
+                let target = 0;
+                if (dur > 0) {
+                    target = Math.min(1.0, dur * 0.25);
+                    if (dur < 0.5) target = dur * 0.5;   // video pendek
+                }
+                
+                if (target === 0) {
+                    // Tidak bisa seek — langsung gambar frame sekarang
+                    drawFrame();
+                } else {
+                    video.currentTime = target;
+                }
+            };
+    
+            video.onseeked = () => {
+                // Delay kecil biar compositor sempat render frame
+                requestAnimationFrame(() => setTimeout(drawFrame, 50));
+            };
+    
+            video.onerror = () => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                cleanup();
+                reject(new Error('Video tidak bisa dibaca (codec tidak didukung?)'));
+            };
+        });
+    }
 
-            if (actionName === 'toggleMoreMenu') {
-                menu.style.display = (menu.style.display === 'flex') ? 'none' : 'flex';
-            } 
-            else if (actionName === 'triggerFile') {
-                document.getElementById('file-input').click();
-            } 
-            else if (actionName === 'switchUiView') {
-                const views = galleryConfig.zoom_config.ui_navigation_modes.available_views;
-                let nextTabIdx = (currentTabIdx + 1) % views.length;
-                changeTab(views[nextTabIdx].id, views[nextTabIdx].filter, nextTabIdx);
-            }
-            else if (actionName === 'resetTransform') {
-                resetTransform();
-            } 
-            else if (actionName === 'cycleRendering') {
-                cycleRendering();
-            }
-            else if (actionName === 'clearImage') {
-              if (currentActiveMedia) {
+    // UPSCALE GAMBAR — WASM bicubic 2x/4x, simpan sebagai file baru
+    async function upscaleImage(factor) {
+        if (!srcPtr || !srcW || !srcH) {
+            alert('Buka gambar dulu, bukan video.');
+            return;
+        }
+        if (!wasmReady) {
+            alert('WASM belum siap. Tunggu beberapa detik lagi.');
+            return;
+        }
+    
+        const newW = Math.floor(srcW * factor);
+        const newH = Math.floor(srcH * factor);
+        const totalPixels = newW * newH;
+    
+        // Batas aman 40 megapiksel
+        if (totalPixels > 40_000_000) {
+            alert(
+                `Terlalu besar.\n\n` +
+                `Asli: ${srcW}×${srcH}\n` +
+                `Hasil: ${newW}×${newH} (${(totalPixels/1e6).toFixed(1)} MP)\n\n` +
+                `Maksimal ~40 MP.\nCoba gambar yang lebih kecil.`
+            );
+            return;
+        }
+    
+        const estimasiMB = (totalPixels * 4 / 1024 / 1024).toFixed(1);
+        if (!confirm(
+            `Upscale ${factor}×?\n\n` +
+            `Asli: ${srcW}×${srcH}\n` +
+            `Hasil: ${newW}×${newH}\n` +
+            `Estimasi RAM: ${estimasiMB} MB\n\n` +
+            `Proses ~${(totalPixels/1e6).toFixed(1)} detik. Lanjut?`
+        )) return;
+    
+        const dstSize = newW * newH * 4;
+        let dstPtr = 0;
+    
+        try {
+            console.log(`📐 Upscale ${factor}x: ${srcW}×${srcH} → ${newW}×${newH} (${(totalPixels/1e6).toFixed(1)} MP)`);
+            const t0 = performance.now();
+    
+            dstPtr = Module._malloc(dstSize);
+            if (!dstPtr) throw new Error('Gagal alokasi memori WASM');
+    
+            // Panggil WASM bicubic, zoom = factor
+            Module._render_bicubic(srcPtr, srcW, srcH, dstPtr, newW, newH, 0, 0, factor);
+    
+            const t1 = performance.now();
+            console.log(`✅ Bicubic selesai: ${(t1-t0).toFixed(0)}ms`);
+    
+            // Copy hasil ke canvas baru
+            const canvas = document.createElement('canvas');
+            canvas.width = newW;
+            canvas.height = newH;
+            const ctx = canvas.getContext('2d');
+    
+            const outView = new Uint8ClampedArray(Module.HEAPU8.buffer, dstPtr, dstSize);
+            const imageData = ctx.createImageData(newW, newH);
+            imageData.data.set(outView);
+            ctx.putImageData(imageData, 0, 0);
+    
+            Module._free(dstPtr);
+            dstPtr = 0;
+    
+            // Convert ke JPEG
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    alert('Gagal konversi hasil ke file.');
+                    return;
+                }
+    
+                const now = Date.now();
+                const baseName = (currentActiveMedia?.name || 'image').replace(/\.[^.]+$/, '');
+                const newName = `${baseName}_${factor}x_${now}.jpg`;
+                const file = new File([blob], newName, { type: 'image/jpeg' });
+    
+                try {
+                    const id = await simpanMedia(file);
+                    console.log(`✅ Upscale tersimpan, id: ${id}, size: ${(blob.size/1024/1024).toFixed(2)} MB`);
+                    alert(
+                        `✅ Upscale ${factor}× berhasil!\n\n` +
+                        `📥 Sebelum:\n   ${srcW}×${srcH} (${(srcW*srcH/1e6).toFixed(1)} MP)\n\n` +
+                        `📤 Sesudah:\n   ${newW}×${newH} (${(newW*newH/1e6).toFixed(1)} MP)\n\n` +
+                        `💾 Ukuran file: ${(blob.size/1024/1024).toFixed(2)} MB\n` +
+                        `⏱️ Waktu proses: ${(t1 - t0).toFixed(0)}ms\n\n` +
+                        `📁 File baru: ${newName}\n` +
+                        `Cek di tab "🖼️ Riwayat"`
+                    );
+                    await loadSavedMedia();
+                } catch (e) {
+                    console.error('Gagal simpan hasil upscale:', e);
+                    alert('Gagal simpan: ' + e.message);
+                }
+            }, 'image/jpeg', 0.92);
+    
+        } catch (e) {
+            if (dstPtr) { try { Module._free(dstPtr); } catch {} }
+            console.error('Upscale error:', e);
+            alert('Upscale gagal: ' + e.message);
+        }
+    }
+
+    // ═══ AKSI ═══
+    async function triggerAction(actionName) {
+        const menu = document.getElementById('more-menu-popup');
+        if (actionName !== 'toggleMoreMenu') menu.style.display = 'none';
+
+        if (actionName === 'toggleMoreMenu') {
+            menu.style.display = (menu.style.display === 'flex') ? 'none' : 'flex';
+        } else if (actionName === 'triggerFile') {
+            document.getElementById('file-input').click();
+        } else if (actionName === 'switchUiView') {
+            const views = galleryConfig.zoom_config.ui_navigation_modes.available_views;
+            const next = (currentTabIdx + 1) % views.length;
+            changeTab(views[next].id, views[next].filter, next);
+        } else if (actionName === 'resetTransform') {
+            resetTransform();
+        } else if (actionName === 'cycleColorMode') {
+            cycleColorMode();
+        } else if (actionName === 'clearImage') {
+            if (currentActiveMedia) {
                 await hapusMedia(currentActiveMedia.id);
                 currentActiveMedia = null;
-              }
-              tutupLayarZoom();
             }
-            else if (actionName === 'showFileInfo') {
-                if (!currentActiveMedia) return alert("Buka file dulu!");
-                const ukuranMB = (currentActiveMedia.blob.size / (1024 * 1024)).toFixed(2);
-                const tanggal = new Date(currentActiveMedia.date).toLocaleString('id-ID');
-                alert(
-                    `ℹ️ DETAIL BERKAS\n` +
-                    `• Nama: ${currentActiveMedia.name}\n` +
-                    `• Tipe: ${currentActiveMedia.type}\n` +
-                    `• Ukuran: ${ukuranMB} MB\n` +
-                    `• Tanggal: ${tanggal}`
-                );
-            }
-            else if (actionName === 'renameFile') {
-              if (!currentActiveMedia) return alert('Buka file dulu!');
-              const n = prompt('Nama baru:', currentActiveMedia.name);
-              if (n) {
-                await ubahNamaMedia(currentActiveMedia.id, n);
-                currentActiveMedia.name = n;
+            tutupLayarZoom();
+        } else if (actionName === 'showFileInfo') {
+            if (!currentActiveMedia) return alert("Buka file dulu!");
+            const mb = (currentActiveMedia.blob.size / (1024 * 1024)).toFixed(2);
+            const tgl = new Date(currentActiveMedia.date).toLocaleString('id-ID');
+            alert(`ℹ️ DETAIL BERKAS\n• Nama: ${currentActiveMedia.name}\n• Tipe: ${currentActiveMedia.type}\n• Ukuran: ${mb} MB\n• Tanggal: ${tgl}`);
+        } else if (actionName === 'renameFile') {
+            if (!currentActiveMedia) return alert('Buka file dulu!');
+            const n = prompt('Nama baru:', currentActiveMedia.name);
+            if (n && n.trim()) {
+                await ubahNamaMedia(currentActiveMedia.id, n.trim());
+                currentActiveMedia.name = n.trim();
                 alert('Nama diubah!');
-              }
             }
-            else if (actionName === 'shareImage') {
-                if (!currentActiveMedia) return alert("Buka file dulu!");
-                
-                const file = new File(
-                    [currentActiveMedia.blob],
-                    currentActiveMedia.name,
-                    { type: currentActiveMedia.type }
-                );
-                
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    navigator.share({
-                        files: [file],
-                        title: currentActiveMedia.name
-                    }).catch((err) => {
-                        if (err.name !== 'AbortError') {
-                            alert('Gagal share: ' + err.message);
-                        }
-                    });
-                } else {
-                    alert('HP ini tidak support share file dari web.');
-                }
+        } else if (actionName === 'upscaleImage') {
+            await upscaleImage(2);
+        } else if (actionName === 'shareImage') {
+            if (!currentActiveMedia) return alert("Buka file dulu!");
+            const file = new File([currentActiveMedia.blob], currentActiveMedia.name, { type: currentActiveMedia.type });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: currentActiveMedia.name })
+                    .catch((err) => { if (err.name !== 'AbortError') alert('Gagal share: ' + err.message); });
+            } else {
+                alert('HP ini tidak support share file dari web.');
             }
         }
+    }
 
-        window.addEventListener('load', () => {
-            canvasCtx = document.getElementById('gallery-canvas').getContext('2d');
-        
-            // Tunggu WASM siap (Module di-define oleh zoom_wasm.js)
-            const waitWasm = setInterval(() => {
-                if (typeof Module !== 'undefined' && Module.calledRun) {
-                    wasmReady = true;
-                    clearInterval(waitWasm);
-                    console.log('✅ WASM bicubic siap');
+    // ═══ CLOSE VIEWER ═══
+    function tutupLayarZoom() {
+        if (history.state && history.state.viewer) history.back();
+        else _tutupLayarZoomInternal();
+    }
+    function _tutupLayarZoomInternal() {
+        clearSavedVideoZoom();
+        document.getElementById('gallery-image').style.display = 'none';
+        document.getElementById('gallery-image').src = '';
+        const v = document.getElementById('gallery-video');
+        try {
+            if (v && !v.paused) v.pause();
+        } catch (e) { /* ignore */ }
+        v.style.display = 'none';
+        v.removeAttribute('src');   // bukan v.src = '' (lebih proper)
+        try { v.load(); } catch (e) { /* ignore */ }
+        document.getElementById('gallery-canvas').style.display = 'none';
+        document.getElementById('zoom-badge').style.display = 'none';
+        if (srcPtr) { Module._free(srcPtr); srcPtr = 0; srcW = 0; srcH = 0; }
+        currentActiveMedia = null;
+        document.getElementById('explorer-area').style.display = 'block';
+        document.getElementById('nav-header').style.display = 'flex';
+        const activeView = galleryConfig.zoom_config.ui_navigation_modes.available_views[currentTabIdx];
+        changeTab(activeView.id, activeView.filter, currentTabIdx);
+    }
+    window.addEventListener('popstate', () => {
+        if (document.getElementById('zoom-badge').style.display === 'block') {
+            _tutupLayarZoomInternal();
+        }
+    });
+
+    async function toggleFullscreenLandscape() {
+        const container = document.getElementById('viewer-core');
+    
+        try {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                // MASUK fullscreen
+                if (container.requestFullscreen) {
+                    await container.requestFullscreen();
+                } else if (container.webkitRequestFullscreen) {
+                    await container.webkitRequestFullscreen();
                 }
-            }, 100);
-        
-            // Timeout 10 detik
-            setTimeout(() => clearInterval(waitWasm), 10000);
+    
+                // Coba lock landscape
+                if (screen.orientation && screen.orientation.lock) {
+                    try {
+                        await screen.orientation.lock('landscape');
+                        console.log('✅ Landscape terkunci');
+                    } catch (e) {
+                        console.warn('Tidak bisa lock landscape:', e.message);
+                        // Tidak fatal — fullscreen tetap jalan, cuma portrait
+                    }
+                }
+            } else {
+                // KELUAR fullscreen
+                if (screen.orientation && screen.orientation.unlock) {
+                    try { screen.orientation.unlock(); } catch {}
+                }
+                if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    await document.webkitExitFullscreen();
+                }
+            }
+        } catch (e) {
+            console.warn('Fullscreen error:', e.message);
+            alert('Fullscreen tidak didukung di HP ini.\n\n' + e.message);
+        }
+    }
+    
+    // Sync tombol fullscreen dengan state sebenarnya
+    document.addEventListener('fullscreenchange', () => {
+        const btn = document.querySelector('#video-toolbar button[title="Layar penuh"]');
+        if (btn) {
+            const isFull = !!document.fullscreenElement;
+            btn.textContent = isFull ? '⛶✕' : '⛶';
+            btn.title = isFull ? 'Keluar layar penuh' : 'Layar penuh';
+        }
+    });
+    
+    // ═══════════════════════════════════════════════════════
+    // VIDEO OVERLAY — Kontrol player dengan auto-hide
+    // ═══════════════════════════════════════════════════════
+    function isVideoActive() {
+        return currentActiveMedia
+            && currentActiveMedia.type
+            && currentActiveMedia.type.startsWith('video/');
+    }
+    
+    function showVideoOverlay(autoHide = true) {
+        const ov = document.getElementById('video-overlay');
+        if (!ov) return;
+        ov.classList.add('visible');
+        ov.style.display = 'block';
+        videoOverlayVisible = true;
+        if (autoHide) scheduleHideOverlay();
+    }
+    
+    function hideVideoOverlay() {
+        const ov = document.getElementById('video-overlay');
+        if (!ov) return;
+        ov.classList.remove('visible');
+        videoOverlayVisible = false;
+        if (videoOverlayTimer) {
+            clearTimeout(videoOverlayTimer);
+            videoOverlayTimer = null;
+        }
+        // Sembunyikan setelah animasi selesai
+        setTimeout(() => {
+            if (!videoOverlayVisible) ov.style.display = 'none';
+        }, 300);
+    }
+    
+    function scheduleHideOverlay() {
+        if (videoOverlayTimer) clearTimeout(videoOverlayTimer);
+        videoOverlayTimer = setTimeout(() => {
+            // Jangan hide kalau sedang scrub seek bar
+            const seek = document.getElementById('video-seek');
+            if (seek && document.activeElement === seek) {
+                scheduleHideOverlay();
+                return;
+            }
+            hideVideoOverlay();
+        }, 3000);
+    }
+    
+    function toggleVideoOverlay() {
+        if (videoOverlayVisible) hideVideoOverlay();
+        else showVideoOverlay();
+    }
+    
+    function formatTime(sec) {
+        if (!isFinite(sec) || sec < 0) return '0:00';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+    
+    function initVideoEvents() {
+        if (videoEventsReady) return;
+        videoEventsReady = true;
+    
+        const video = document.getElementById('gallery-video');
+        const seek = document.getElementById('video-seek');
+        const btnPlay = document.getElementById('video-play-btn');
+        const timeCurrent = document.getElementById('video-time-current');
+        const timeTotal = document.getElementById('video-time-total');
+    
+        video.addEventListener('timeupdate', () => {
+            if (!video.duration) return;
+            seek.value = Math.floor((video.currentTime / video.duration) * 1000);
+            timeCurrent.textContent = formatTime(video.currentTime);
         });
+    
+        video.addEventListener('loadedmetadata', () => {
+            timeTotal.textContent = formatTime(video.duration);
+        });
+    
+        video.addEventListener('play', () => { btnPlay.textContent = '| |'; });
+        video.addEventListener('pause', () => { btnPlay.textContent = '▶'; });
+    
+        // Seek bar: reset timer saat interaksi
+        seek.addEventListener('input', () => {
+            if (!video.duration) return;
+            video.currentTime = (seek.value / 1000) * video.duration;
+        });
+        seek.addEventListener('touchstart', () => {
+            if (videoOverlayTimer) clearTimeout(videoOverlayTimer);
+        }, { passive: true });
+        seek.addEventListener('touchend', () => {
+            scheduleHideOverlay();
+        }, { passive: true });
+    
+        // Kalau video pause sendiri, tampilkan overlay
+        video.addEventListener('pause', () => {
+            showVideoOverlay(false);  // tampil tapi jangan auto-hide
+        });
+    }
+    
+    function updatePlaybackButtons(rate) {
+        const tb = document.querySelector('.video-top-bar');
+        if (!tb) return;
+        tb.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        const btn = tb.querySelector(`button[data-rate="${rate}"]`);
+        if (btn) btn.classList.add('active');
+    }
+    
+    function videoAction(action, param) {
+        const video = document.getElementById('gallery-video');
+        if (!video || video.style.display !== 'block') return;
+    
+        scheduleHideOverlay();
+    
+        switch (action) {
+            case 'rewind':
+                video.currentTime = Math.max(0, video.currentTime - 5);
+                break;
+    
+            case 'forward':
+                video.currentTime = Math.min(video.duration || 0, video.currentTime + 5);
+                break;
+    
+            case 'rate':
+                video.playbackRate = param;
+                updatePlaybackButtons(param);
+                console.log(`🎬 Playback rate: ${param}x`);
+                break;
+    
+            case 'toggleplay':
+                if (video.paused) {
+                    video.play().catch(() => {
+                        video.muted = true;
+                        video.play().catch(() => {});
+                    });
+                } else {
+                    video.pause();
+                }
+                break;
+
+            case 'nextvideo':
+                goToVideo(1);
+                break;
+            
+            case 'prevvideo':
+                goToVideo(-1);
+                break;
+
+            case 'fullscreen':
+                toggleFullscreenLandscape();
+                break;
+        }
+    }
+    
+    // Patch tutupLayarZoomInternal — panggil hideVideoOverlay
+    (function patchCloseViewer() {
+        const orig = window._tutupLayarZoomInternal;
+        if (!orig) return;
+        window._tutupLayarZoomInternal = function() {
+            hideVideoOverlay();
+            // Restore app toolbar
+            const bt = document.querySelector('.bottom-toolbar');
+            if (bt) bt.style.display = 'flex';
+            const ov = document.getElementById('video-overlay');
+            if (ov) ov.style.display = 'none';
+            orig.apply(this, arguments);
+            stopSubtitleSync();
+            window._pendingSubtitle = null;
+        };
+    })();
+
+    // ═══════════════════════════════════════════════════════
+    // MULTI-JALUR BACA VIDEO
+    // Coba berbagai MIME type sebelum menyerah
+    // ═══════════════════════════════════════════════════════
+    
+    const VIDEO_MIME_CHAIN = [
+        null,                    // 1. Coba MIME asli dulu
+        'video/mp4',             // 2. Paksa sebagai MP4
+        'video/webm',            // 3. Coba WebM
+        'video/x-matroska',      // 4. MKV eksplisit
+        'video/quicktime',       // 5. QuickTime/MOV
+        'video/3gpp',            // 6. 3GP
+    ];
+    
+    // Coba load video dengan MIME tertentu
+    // Return Promise yang resolve kalau berhasil, reject kalau gagal
+    function tryLoadVideo(videoEl, blob, mimeType, timeoutMs = 4000) {
+        return new Promise((resolve, reject) => {
+            const newBlob = mimeType ? new Blob([blob], { type: mimeType }) : blob;
+            const url = URL.createObjectURL(newBlob);
+    
+            let settled = false;
+            const cleanup = () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                videoEl.removeEventListener('loadedmetadata', onLoaded);
+                videoEl.removeEventListener('error', onError);
+            };
+    
+            const timer = setTimeout(() => {
+                cleanup();
+                URL.revokeObjectURL(url);
+                reject(new Error(`Timeout (${mimeType || 'asli'})`));
+            }, timeoutMs);
+    
+            const onLoaded = () => {
+                if (settled) return;
+                // Cek durasi valid (> 0 atau Infinity untuk live)
+                const dur = videoEl.duration;
+                if (!dur || isNaN(dur) || dur <= 0) {
+                    cleanup();
+                    URL.revokeObjectURL(url);
+                    reject(new Error(`Metadata tidak valid (${mimeType || 'asli'})`));
+                    return;
+                }
+                cleanup();
+                resolve({ url, mime: mimeType || blob.type || 'unknown', duration: dur });
+            };
+    
+            const onError = () => {
+                if (settled) return;
+                cleanup();
+                URL.revokeObjectURL(url);
+                reject(new Error(`Load error (${mimeType || 'asli'})`));
+            };
+    
+            videoEl.addEventListener('loadedmetadata', onLoaded, { once: true });
+            videoEl.addEventListener('error', onError, { once: true });
+    
+            // Set source baru
+            videoEl.pause();
+            videoEl.removeAttribute('src');
+            videoEl.load();
+            videoEl.src = url;
+        });
+    }
+    
+    // Coba semua MIME dalam chain
+    async function probeVideo(blob) {
+        // Buat video element temporary (jangan ganggu video utama)
+        const tester = document.createElement('video');
+        tester.preload = 'metadata';
+        tester.muted = true;
+        tester.playsInline = true;
+    
+        const results = [];
+    
+        for (const mime of VIDEO_MIME_CHAIN) {
+            // Skip MIME yang browser bilang tidak support sama sekali
+            if (mime && tester.canPlayType(mime) === '') {
+                console.log(`⏭️ Skip ${mime} (browser tolak)`);
+                continue;
+            }
+    
+            try {
+                console.log(`🔍 Coba jalur: ${mime || 'asli (' + (blob.type || 'unknown') + ')'}`);
+                const result = await tryLoadVideo(tester, blob, mime);
+                console.log(`✅ Berhasil via ${result.mime} (durasi ${result.duration.toFixed(1)}s)`);
+                results.push({ mime: result.mime, url: result.url, duration: result.duration, ok: true });
+                return results[results.length - 1];
+            } catch (e) {
+                console.warn(`❌ ${mime || 'asli'}: ${e.message}`);
+            }
+        }
+    
+        return null;
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // DETEKSI VIDEO TIDAK BISA DI-DECODE (layar hitam)
+    // ═══════════════════════════════════════════════════════
+    
+    // Setelah video.play(), tunggu ~800ms lalu cek apakah frame benar-benar muncul
+    async function detectBlackScreen(videoEl) {
+        // Tunggu `loadeddata` event — frame pertama siap
+        const waitForData = await new Promise((resolve) => {
+            if (videoEl.readyState >= 2) {
+                return resolve({ ok: true });
+            }
+            let settled = false;
+            const onLoaded = () => {
+                if (settled) return;
+                settled = true;
+                resolve({ ok: true });
+            };
+            const onError = () => {
+                if (settled) return;
+                settled = true;
+                resolve({ ok: false, reason: `video.onerror: ${videoEl.error?.message || 'codec tidak didukung'}` });
+            };
+            videoEl.addEventListener('loadeddata', onLoaded, { once: true });
+            videoEl.addEventListener('error', onError, { once: true });
+            setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                resolve({ ok: false, reason: 'Timeout: video tidak siap dalam 8 detik' });
+            }, 8000);
+        });
+    
+        if (!waitForData.ok) return waitForData;
+    
+        // Sekarang cek videoWidth/Height — harus > 0
+        if (!videoEl.videoWidth || !videoEl.videoHeight) {
+            return { ok: false, reason: `videoWidth/Height = 0 setelah loadeddata (codec tidak didukung)` };
+        }
+    
+        return { ok: true };
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // SUBTITLE SUPPORT (SRT/VTT)
+    // ═══════════════════════════════════════════════════════
+    // Konversi waktu format SRT "00:00:01,500" → detik (1.5)
+    function parseSubtitleTime(str) {
+        str = str.trim().replace(',', '.');
+        const parts = str.split(':').map(parseFloat);
+        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        if (parts.length === 2) return parts[0] * 60 + parts[1];
+        return parseFloat(str) || 0;
+    }
+    
+    // Parse SRT (SubRip)
+    function parseSRT(text) {
+        const cues = [];
+        // Normalisasi line endings
+        text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        // Split by blank lines
+        const blocks = text.split(/\n\n+/);
+        for (const block of blocks) {
+            const lines = block.split('\n').filter(l => l.trim());
+            if (lines.length < 2) continue;
+            // Cari baris waktu (mengandung -->)
+            let timeLineIdx = lines.findIndex(l => l.includes('-->'));
+            if (timeLineIdx === -1) continue;
+            const timeLine = lines[timeLineIdx];
+            const m = timeLine.match(/(.+?)\s*-->\s*(.+?)(?:\s|$)/);
+            if (!m) continue;
+            const start = parseSubtitleTime(m[1]);
+            const end = parseSubtitleTime(m[2]);
+            const textLines = lines.slice(timeLineIdx + 1);
+            const textContent = textLines.join('\n').replace(/<[^>]+>/g, ''); // strip HTML tags
+            cues.push({ start, end, text: textContent });
+        }
+        return cues;
+    }
+    
+    // Parse VTT (WebVTT) — mirip SRT tapi header beda
+    function parseVTT(text) {
+        // Buang header WEBVTT
+        text = text.replace(/^WEBVTT.*?\n\n/s, '');
+        // Sama seperti SRT setelah itu
+        return parseSRT(text);
+    }
+    
+    // Deteksi format dan parse
+    function parseSubtitleFile(text) {
+        if (text.trim().startsWith('WEBVTT')) return parseVTT(text);
+        return parseSRT(text);
+    }
+    
+    // Load subtitle dari file object
+    async function loadSubtitleFile(file) {
+        try {
+            let text = await file.text();
+            // Kalau ada BOM, buang
+            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+            subtitleCues = parseSubtitleFile(text);
+            if (subtitleCues.length === 0) {
+                alert('File subtitle kosong atau format tidak dikenali.');
+                return;
+            }
+            console.log(`📝 Subtitle dimuat: ${subtitleCues.length} baris (${file.name})`);
+            startSubtitleSync();
+            showSubtitleToast(`📝 ${subtitleCues.length} baris subtitle aktif`);
+        } catch (e) {
+            console.error('Gagal baca subtitle:', e);
+            alert('Gagal baca file subtitle: ' + e.message);
+        }
+    }
+    
+    // Prompt file subtitle manual
+    function promptSubtitle() {
+        if (!isVideoActive()) return;
+        document.getElementById('subtitle-input').click();
+    }
+    
+    // Handle file input subtitle
+    document.getElementById('subtitle-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) await loadSubtitleFile(file);
+        e.target.value = '';
+    });
+    
+    // Sync subtitle dengan waktu video
+    function startSubtitleSync() {
+        const video = document.getElementById('gallery-video');
+        const display = document.getElementById('subtitle-display');
+    
+        if (subtitleUpdateTimer) {
+            clearInterval(subtitleUpdateTimer);
+            subtitleUpdateTimer = null;
+        }
+    
+        function update() {
+            if (!isVideoActive() || subtitleCues.length === 0) {
+                display.textContent = '';
+                return;
+            }
+            const t = video.currentTime;
+            // Cari cue yang cocok
+            let found = null;
+            for (const cue of subtitleCues) {
+                if (t >= cue.start && t <= cue.end) {
+                    found = cue;
+                    break;
+                }
+            }
+            display.textContent = found ? found.text : '';
+        }
+    
+        // Update 4× per detik (cukup untuk subtitle)
+        subtitleUpdateTimer = setInterval(update, 250);
+        update();
+    }
+    
+    // Stop sync saat keluar viewer
+    function stopSubtitleSync() {
+        if (subtitleUpdateTimer) {
+            clearInterval(subtitleUpdateTimer);
+            subtitleUpdateTimer = null;
+        }
+        subtitleCues = [];
+        const display = document.getElementById('subtitle-display');
+        if (display) {
+            display.textContent = '';
+            display.style.display = 'none';
+        }
+    }
+    
+    // Toast sederhana
+    function showSubtitleToast(msg) {
+        const t = document.createElement('div');
+        t.textContent = msg;
+        t.style.cssText = `
+            position: fixed; bottom: 180px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 229, 255, 0.95); color: #000;
+            padding: 8px 16px; border-radius: 20px;
+            font-size: 12px; font-weight: bold; z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transition: opacity 0.3s;
+        `;
+        document.body.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; }, 1800);
+        setTimeout(() => t.remove(), 2200);
+    }
+    
+    // ═══ Auto-detect: kalau user pilih video + srt bersama ═══
+    // Kita modifikasi file-input handler untuk cek pasangan
+    (function patchFileInputForSubtitles() {
+        const originalHandler = document.getElementById('file-input');
+        // Simpan referensi onchange lama tidak bisa (arrow function),
+        // jadi kita biarkan saja. Deteksi subtitle di file handler secara implisit.
+    })();
+
+    // ═══════════════════════════════════════════════════════
+    // NEXT / PREV VIDEO + AUTO-PLAY
+    // ═══════════════════════════════════════════════════════
+    
+    async function getVideoList() {
+        const all = await ambilMetadataSemuaMedia();
+        return all.filter(m => m.isVideo);
+    }
+    
+    async function goToVideo(offset) {
+        if (!currentActiveMedia || !currentActiveMedia.isVideo) return;
+        
+        captureVideoZoom();
+        const videos = await getVideoList();
+        const idx = videos.findIndex(v => v.id === currentActiveMedia.id);
+        if (idx === -1) return;
+        
+        const targetIdx = idx + offset;
+        if (targetIdx < 0 || targetIdx >= videos.length) {
+            console.log(offset > 0 ? '⏭ Tidak ada video berikutnya' : '⏮ Tidak ada video sebelumnya');
+            return;
+        }
+        
+        const target = videos[targetIdx];
+        console.log(`🎬 Pindah ke video: ${target.name}`);
+        
+        // Stop video sekarang dulu
+        const video = document.getElementById('gallery-video');
+        try { if (!video.paused) video.pause(); } catch {}
+        
+        // Render video baru (fungsi existing, tidak diubah)
+        await renderActiveMedia(target);
+    }
+    
+    async function autoPlayNextIfAny() {
+        if (!currentActiveMedia || !currentActiveMedia.isVideo) return;
+    
+        const videos = await getVideoList();
+        const idx = videos.findIndex(v => v.id === currentActiveMedia.id);
+    
+        if (idx >= 0 && idx < videos.length - 1) {
+            console.log('⏭ Auto-play video berikutnya...');
+            // ⭐ Pakai goToVideo biar capture+restore konsisten
+            await goToVideo(1);
+        } else {
+            console.log('🏁 Video terakhir, looping sendiri');
+            const video = document.getElementById('gallery-video');
+            video.loop = true;
+            video.currentTime = 0;
+            video.play().catch(() => {});
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // LONG-PRESS CONTEXT MENU (di grid item)
+    // ═══════════════════════════════════════════════════════
+    function ensureContextMenuDOM() {
+        if (document.getElementById('context-menu')) return;
+        
+        const backdrop = document.createElement('div');
+        backdrop.id = 'ctx-backdrop';
+        backdrop.addEventListener('click', hideContextMenu);
+        backdrop.addEventListener('touchstart', hideContextMenu, { passive: true });
+        document.body.appendChild(backdrop);
+        
+        const menu = document.createElement('div');
+        menu.id = 'context-menu';
+        menu.innerHTML = `
+            <div class="ctx-item" data-action="view">👁️ Lihat</div>
+            <div class="ctx-item" data-action="rename">✏️ Rename</div>
+            <div class="ctx-item" data-action="info">ℹ️ Info</div>
+            <div class="ctx-item" data-action="share">⤴️ Share</div>
+            <div class="ctx-item danger" data-action="delete">🗑️ Hapus</div>
+        `;
+        document.body.appendChild(menu);
+        
+        menu.addEventListener('click', async (e) => {
+            const item = e.target.closest('.ctx-item');
+            if (!item) return;
+            const action = item.dataset.action;
+            await handleContextAction(action);
+        });
+        
+        // Reset timeout kalau user interaksi
+        menu.addEventListener('touchstart', () => {
+            if (contextMenuTimeout) clearTimeout(contextMenuTimeout);
+            contextMenuTimeout = setTimeout(hideContextMenu, 4000);
+        }, { passive: true });
+    }
+    
+    function showContextMenu(media, x, y) {
+        ensureContextMenuDOM();
+        contextMenuMedia = media;
+        
+        const menu = document.getElementById('context-menu');
+        const backdrop = document.getElementById('ctx-backdrop');
+        
+        menu.style.display = 'block';
+        backdrop.style.display = 'block';
+        
+        // Ukur dulu sebelum posisi
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+        const rect = menu.getBoundingClientRect();
+        
+        const screenW = window.innerWidth;
+        const screenH = window.innerHeight;
+        let left = x - rect.width / 2;
+        let top = y;
+        
+        if (left + rect.width > screenW - 10) left = screenW - rect.width - 10;
+        if (left < 10) left = 10;
+        if (top + rect.height > screenH - 10) top = y - rect.height - 20;
+        if (top < 10) top = 10;
+        
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        
+        // Auto-hide 4 detik
+        if (contextMenuTimeout) clearTimeout(contextMenuTimeout);
+        contextMenuTimeout = setTimeout(hideContextMenu, 4000);
+    }
+    
+    function hideContextMenu() {
+        const menu = document.getElementById('context-menu');
+        const backdrop = document.getElementById('ctx-backdrop');
+        if (menu) menu.style.display = 'none';
+        if (backdrop) backdrop.style.display = 'none';
+        if (contextMenuTimeout) {
+            clearTimeout(contextMenuTimeout);
+            contextMenuTimeout = null;
+        }
+        contextMenuMedia = null;
+    }
+    
+    async function handleContextAction(action) {
+        const media = contextMenuMedia;
+        if (!media) return;
+        
+        hideContextMenu();
+        
+        if (action === 'view') {
+            await renderActiveMedia(media);
+        } else if (action === 'rename') {
+            const n = prompt('Nama baru:', media.name);
+            if (n && n.trim()) {
+                await ubahNamaMedia(media.id, n.trim());
+                console.log(`✏️ Rename id ${media.id} → ${n.trim()}`);
+                await loadSavedMedia();
+            }
+        } else if (action === 'info') {
+            const mb = (media.size / (1024 * 1024)).toFixed(2);
+            const tgl = new Date(media.date).toLocaleString('id-ID');
+            alert(
+                `ℹ️ DETAIL\n\n` +
+                `Nama: ${media.name}\n` +
+                `Tipe: ${media.type}\n` +
+                `Ukuran: ${mb} MB\n` +
+                `Tanggal: ${tgl}\n` +
+                `ID: ${media.id}`
+            );
+        } else if (action === 'share') {
+            let blob = media.blob;
+            if (!blob) {
+                const full = await ambilMedia(media.id);
+                if (full) blob = full.blob;
+            }
+            if (!blob) { alert('File tidak bisa diakses.'); return; }
+            
+            const mb = blob.size / (1024 * 1024);
+            if (mb > 200) {
+                alert(`File terlalu besar untuk share (${mb.toFixed(0)} MB).`);
+                return;
+            }
+            
+            const file = new File([blob], media.name, { type: media.type });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: media.name })
+                    .catch(err => { if (err.name !== 'AbortError') alert('Gagal share: ' + err.message); });
+            } else {
+                alert('HP ini tidak support share file dari web.');
+            }
+        } else if (action === 'delete') {
+            if (!confirm(`Hapus "${media.name}"?\n\nTidak bisa dibatalkan.`)) return;
+            await hapusMedia(media.id);
+            console.log(`🗑️ Hapus id ${media.id}`);
+            if (currentActiveMedia && currentActiveMedia.id === media.id) {
+                tutupLayarZoom();
+            }
+            await loadSavedMedia();
+        }
+    }
+    
+    // ⭐ Attach long-press handler ke grid item
+    function attachGridItemHandlers(box, media) {
+        let lpTimer = null;
+        let lpFired = false;
+        
+        const startLP = (clientX, clientY) => {
+            lpFired = false;
+            if (lpTimer) clearTimeout(lpTimer);
+            lpTimer = setTimeout(() => {
+                lpFired = true;
+                if (navigator.vibrate) navigator.vibrate(30);
+                showContextMenu(media, clientX, clientY);
+            }, 500);
+        };
+        
+        const cancelLP = () => {
+            if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+        };
+        
+        box.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            startLP(t.clientX, t.clientY);
+        }, { passive: true });
+        box.addEventListener('touchend', cancelLP);
+        box.addEventListener('touchmove', cancelLP, { passive: true });
+        box.addEventListener('touchcancel', cancelLP);
+        
+        // Desktop
+        box.addEventListener('mousedown', (e) => startLP(e.clientX, e.clientY));
+        box.addEventListener('mouseup', cancelLP);
+        box.addEventListener('mouseleave', cancelLP);
+        box.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        // Klik biasa → buka viewer (kecuali habis long-press)
+        box.onclick = () => {
+            if (lpFired) { lpFired = false; return; }
+            renderActiveMedia(media);
+        };
+    }
+
+    // STICKY ZOOM — pertahankan zoom saat pindah video
+    function captureVideoZoom() {
+        savedVideoZoom = { scale: zoomScale, panX, panY };
+        console.log(`📸 Zoom tersimpan: ${zoomScale.toFixed(1)}x`);
+    }
+    
+    function clearSavedVideoZoom() {
+        savedVideoZoom = null;
+    }
     </script>
 </body>
 </html>
